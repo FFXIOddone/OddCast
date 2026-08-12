@@ -1,13 +1,38 @@
 addon.name = 'oddcast';
 addon.author = 'OddLua';
-addon.version = '0.2.0';
+addon.version = '0.2.1';
 addon.desc = 'Selects a ready nuke for the current Vana day or a validated static target baseline.';
 
 require('common');
 local bit = require('bit');
 local chat = require('chat');
+local ffi = require('ffi');
+local settings = require('settings');
+
+local defaultSettings = T{
+    target = '<t>',
+};
+local activeSettings = settings.load(defaultSettings);
+settings.register('settings', 'oddcast_settings_cb', function(updatedSettings)
+    activeSettings = updatedSettings;
+end);
+
+pcall(ffi.cdef, [[
+    typedef struct {
+        uint32_t GuideNo;
+        uint32_t UniqueNo;
+    } OddCastCharId;
+
+    typedef struct {
+        uint8_t padding00[116];
+        OddCastCharId id;
+    } OddCastBattleActor;
+
+    typedef OddCastBattleActor* (__stdcall* OddCastSeekBattleActor_f)(void);
+]]);
 
 local VANA_TIME_SIGNATURE = 'B0015EC390518B4C24088D4424005068';
+local BATTLE_TARGET_SIGNATURE = '66A1????????83EC186685C053565774??0FBFC08B0C85';
 local VANA_TIME_EPOCH_OFFSET = 92514960;
 local VANA_DAY_SECONDS = 3456;
 
@@ -76,6 +101,7 @@ local spells = {
 };
 
 local vanaTimeAddress = nil;
+local battleTargetAddress = nil;
 
 local weaknessElements = { 'Fire', 'Ice', 'Wind', 'Earth', 'Lightning', 'Water' };
 
@@ -248,22 +274,85 @@ local function loadWeaknessZone(zone)
     return weaknessZone, nil;
 end
 
-local function currentTarget()
+local function configuredTargetToken()
+    local token = activeSettings and activeSettings.target or nil;
+    if token == '<t>' or token == '<bt>' then
+        return token, nil;
+    end
+    return nil, 'OddCast target setting is invalid. Use /oc target <t> or /oc target <bt>.';
+end
+
+local function battleTargetIndex()
+    if battleTargetAddress == nil or battleTargetAddress <= 0 then
+        local found = tonumber(safe(0, function()
+            return ashita.memory.find('FFXiMain.dll', 0, BATTLE_TARGET_SIGNATURE, 0, 0);
+        end)) or 0;
+        if found > 0 then
+            battleTargetAddress = found;
+        end
+    end
+    if battleTargetAddress == nil or battleTargetAddress <= 0 then
+        return nil, nil, 'The <bt> resolver is unavailable; no spell was queued.';
+    end
+
+    local ok, actor = pcall(function()
+        local seekBattleActor = ffi.cast('OddCastSeekBattleActor_f', battleTargetAddress);
+        return seekBattleActor();
+    end);
+    if not ok then
+        battleTargetAddress = nil;
+        return nil, nil, 'The <bt> resolver failed; no spell was queued.';
+    end
+    if actor == nil then
+        return nil, nil, 'No battle target is available for <bt>.';
+    end
+
+    local index = tonumber(safe(nil, function() return actor.id.GuideNo; end));
+    local serverId = tonumber(safe(nil, function() return actor.id.UniqueNo; end));
+    if not isPositiveInteger(index) then
+        return nil, nil, 'No battle target is available for <bt>.';
+    end
+    return index, serverId, nil;
+end
+
+local function targetIndexForToken(memory, token)
+    if token == '<bt>' then
+        return battleTargetIndex();
+    end
+
+    local target = safe(nil, function() return memory:GetTarget(); end);
+    if target == nil then
+        return nil, nil, 'Target memory is unavailable.';
+    end
+    local subTargetActive = safe(nil, function() return target:GetIsSubTargetActive(); end);
+    if subTargetActive == nil then
+        return nil, nil, 'The <t> target state is unavailable; no spell was queued.';
+    end
+    if subTargetActive == true or (tonumber(subTargetActive) or 0) ~= 0 then
+        return nil, nil, 'Finish or cancel the active subtarget before using OddCast.';
+    end
+
+    local index = tonumber(safe(0, function() return target:GetTargetIndex(0); end)) or 0;
+    if index <= 0 then
+        return nil, nil, 'Select a monster first.';
+    end
+    return index, nil, nil;
+end
+
+local function currentTarget(token)
     local memory = safe(nil, function() return AshitaCore:GetMemoryManager(); end);
     if memory == nil then
         return nil, 'Ashita memory is unavailable.';
     end
 
-    local target = safe(nil, function() return memory:GetTarget(); end);
     local entity = safe(nil, function() return memory:GetEntity(); end);
-    if target == nil or entity == nil then
-        return nil, 'Target memory is unavailable.';
+    if entity == nil then
+        return nil, 'Entity memory is unavailable.';
     end
 
-    -- OddCast queues <t>, so validate the main target that <t> will resolve to.
-    local index = tonumber(safe(0, function() return target:GetTargetIndex(0); end)) or 0;
-    if index <= 0 then
-        return nil, 'Select a monster first.';
+    local index, nativeServerId, indexError = targetIndexForToken(memory, token);
+    if index == nil then
+        return nil, indexError;
     end
 
     local flags = tonumber(safe(0, function() return entity:GetSpawnFlags(index); end)) or 0;
@@ -280,6 +369,9 @@ local function currentTarget()
     if not isPositiveInteger(serverId) then
         return nil, 'The selected monster has no readable server ID.';
     end
+    if isPositiveInteger(nativeServerId) and nativeServerId ~= serverId then
+        return nil, 'The <bt> identity changed during resolution; no spell was queued.';
+    end
 
     local party = safe(nil, function() return memory:GetParty(); end);
     local zone = party and tonumber(safe(nil, function() return party:GetMemberZone(0); end)) or nil;
@@ -292,6 +384,7 @@ local function currentTarget()
         serverId = serverId,
         name = name,
         zone = zone,
+        token = token,
         memory = memory,
     }, nil;
 end
@@ -388,9 +481,16 @@ local function readySpells(memory)
 end
 
 local function cast(spell, expectedTarget)
-    local actualTarget = currentTarget();
-    if actualTarget == nil
-        or actualTarget.index ~= expectedTarget.index
+    local configuredToken = configuredTargetToken();
+    if configuredToken ~= expectedTarget.token then
+        return false, 'Target setting changed during selection; no spell was queued.';
+    end
+
+    local actualTarget, targetError = currentTarget(expectedTarget.token);
+    if actualTarget == nil then
+        return false, targetError;
+    end
+    if actualTarget.index ~= expectedTarget.index
         or actualTarget.serverId ~= expectedTarget.serverId
         or actualTarget.name ~= expectedTarget.name
         or actualTarget.zone ~= expectedTarget.zone
@@ -403,7 +503,7 @@ local function cast(spell, expectedTarget)
         return false, 'Ashita chat manager is unavailable; no spell was queued.';
     end
     local ok = pcall(function()
-        chatManager:QueueCommand(1, string.format('/ma "%s" <t>', spell.name));
+        chatManager:QueueCommand(1, string.format('/ma "%s" %s', spell.name, expectedTarget.token));
     end);
     if not ok then
         return false, 'Ashita rejected the queued spell command.';
@@ -557,6 +657,39 @@ end
 local function showHelp()
     message('/oddcast day | /oc day - highest modeled ready spell matching the current Vana day.', false);
     message('/oddcast weakness | /oc weak - dominance-safe static baseline for an exact indexed target.', false);
+    message('/oddcast settings | /oc settings - show current text settings.', false);
+    message('/oddcast target [<t>|<bt>] | /oc target [<t>|<bt>] - show or set the hostile target token.', false);
+end
+
+local function showSettings()
+    local token, tokenError = configuredTargetToken();
+    if token == nil then
+        message(tokenError, true);
+        return;
+    end
+    message(string.format('Target token: %s', token), false);
+end
+
+local function setTargetToken(value)
+    local token = string.lower(tostring(value or ''));
+    if token ~= '<t>' and token ~= '<bt>' then
+        message('Unsupported target token. Use /oc target <t> or /oc target <bt>.', true);
+        return;
+    end
+    if type(activeSettings) ~= 'table' then
+        message('OddCast settings are unavailable; target was not changed.', true);
+        return;
+    end
+
+    local previous = activeSettings.target;
+    activeSettings.target = token;
+    local ok, saved = pcall(settings.save);
+    if not ok or saved ~= true then
+        activeSettings.target = previous;
+        message('Ashita could not save the OddCast target setting.', true);
+        return;
+    end
+    message(string.format('Target token set: %s', token), false);
 end
 
 ashita.events.register('command', 'oddcast_command_cb', function(e)
@@ -568,6 +701,18 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
     e.blocked = true;
 
     local action = string.lower(tostring(args[2] or 'help'));
+    if action == 'target' then
+        if args[4] ~= nil then
+            message('Too many arguments. Use /oc target <t> or /oc target <bt>.', true);
+            return;
+        end
+        if args[3] == nil then
+            showSettings();
+        else
+            setTargetToken(args[3]);
+        end
+        return;
+    end
     if args[3] ~= nil then
         message('Too many arguments. Use /oc help.', true);
         return;
@@ -576,20 +721,29 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
         showHelp();
         return;
     end
+    if action == 'settings' then
+        showSettings();
+        return;
+    end
     if action ~= 'day' and action ~= 'weak' and action ~= 'weakness' then
         message('Unknown command. Use /oc help.', true);
         return;
     end
 
+    local token, tokenError = configuredTargetToken();
+    if token == nil then
+        message(tokenError, true);
+        return;
+    end
     if action == 'weak' or action == 'weakness' then
-        local target, targetError = currentTarget();
+        local target, targetError = currentTarget(token);
         if target == nil then
             message(targetError, true);
             return;
         end
         chooseWeakness(target);
     else
-        local target, targetError = currentTarget();
+        local target, targetError = currentTarget(token);
         if target == nil then
             message(targetError, true);
             return;
@@ -599,5 +753,5 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
 end);
 
 ashita.events.register('load', 'oddcast_load_cb', function()
-    message('Loaded. Use /oc day, /oc weak, or /oc help.', false);
+    message('Loaded. Use /oc day, /oc weak, /oc settings, or /oc help.', false);
 end);

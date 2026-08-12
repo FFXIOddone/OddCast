@@ -1,7 +1,8 @@
 # OddCast
 
 OddCast is a small Ashita v4 addon for explicit, one-command elemental spell
-selection. It never casts in the background and never injects packets.
+selection. It is text-command only: there is no GUI, it never casts in the
+background, and it never injects packets.
 
 ## Requirements
 
@@ -24,6 +25,10 @@ must include `oddcast.lua`, `weakness_data.lua`, and every generated
 /oc day
 /oddcast weakness
 /oc weak
+/oc settings
+/oc target
+/oc target <t>
+/oc target <bt>
 /oc help
 ```
 
@@ -41,15 +46,23 @@ measure than every other candidate. Ties and potency/rank tradeoffs fail closed.
 
 Ready means all of the following are true: the spell is learned, the current
 main or subjob can use it at its current level, current MP covers its cost, and
-its recast is zero. `day` requires a selected monster and queues one ordinary
-`/ma "Spell" <t>` client command.
+its recast is zero.
 
-Missing targets, spell resources, job levels, MP, recast data, Vana time,
-weakness data, or the chat command queue all fail closed and queue nothing.
-OddCast rechecks zone, target index, server ID, and target name immediately
-before either command is queued. Normal FFXI checks still decide whether the
-queued command executes; OddCast does not claim the caster remained in range,
-unsilenced, or on the same target when the client later executes `<t>`.
+`target` controls the hostile-target token used by both cast commands. The
+default is `<t>`; `<bt>` selects Ashita's current battle target. `/oc target`
+and `/oc settings` report the current value. The setting is persisted through
+Ashita's native settings system. Only `<t>` and `<bt>` are accepted because
+deferred subtarget tokens could let the player choose a different monster after
+OddCast has already selected a spell. An active subtarget cursor makes `<t>`
+fail closed; finish or cancel it before using OddCast.
+
+Missing or invalid settings, targets, spell resources, job levels, MP, recast
+data, Vana time, weakness data, or the chat command queue all fail closed and
+queue nothing. OddCast resolves the configured token first, then rechecks the
+same token's zone, target index, server ID, and target name immediately before
+either command is queued. Normal FFXI checks still decide whether the queued
+command executes; OddCast does not claim the caster remained in range,
+unsilenced, or on the same target when the client later executes the token.
 
 The displayed result is a **static baseline recommendation**, not an actual
 damage prediction. The generated index records its pinned CatsEye source
