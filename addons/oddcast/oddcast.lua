@@ -1,6 +1,6 @@
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '0.2.2';
+addon.version = '0.2.3';
 addon.desc = 'Selects a ready nuke for the current Vana day or a typical mob-family weakness.';
 
 require('common');
@@ -39,6 +39,15 @@ local VANA_DAY_SECONDS = 3456;
 local WEAKNESS_SCHEMA = 2;
 local WEAKNESS_INDEX_FILE = 'weakness_data.lua';
 local weaknessIndex = nil;
+
+local PENDING_REQUEST_TTL_SECONDS = 15.0;
+local POST_CAST_LOCK_SECONDS = 3.1;
+local START_ACK_SECONDS = 2.0;
+local RETRY_LOCK_SECONDS = 1.1;
+local MAX_SUBMISSIONS = 4;
+local PRESENT_THROTTLE_SECONDS = 0.05;
+local pendingRequest = nil;
+local lastPresentAt = nil;
 
 local dayElements = {
     { day = 'Firesday', element = 'Fire' },
@@ -354,6 +363,34 @@ local function currentTarget(token)
     }, nil;
 end
 
+local function targetMatches(expectedTarget, actualTarget)
+    return expectedTarget ~= nil
+        and actualTarget ~= nil
+        and actualTarget.index == expectedTarget.index
+        and actualTarget.serverId == expectedTarget.serverId
+        and actualTarget.name == expectedTarget.name
+        and actualTarget.zone == expectedTarget.zone
+        and actualTarget.token == expectedTarget.token;
+end
+
+local function clockNow()
+    return tonumber(safe(0, function() return os.clock(); end)) or 0;
+end
+
+local function castBarState(memory)
+    local castBar = safe(nil, function() return memory:GetCastBar(); end);
+    if castBar == nil then
+        return nil, 'Ashita cast-bar state is unavailable; no spell was queued.';
+    end
+    -- Count is the stable active-cast signal; Percent can be zero both at the
+    -- start of a cast and while the cast bar is idle.
+    local count = castBar and tonumber(safe(nil, function() return castBar:GetCount(); end)) or nil;
+    if count == nil then
+        return nil, 'Ashita cast-bar state is unavailable; no spell was queued.';
+    end
+    return count > 0, nil;
+end
+
 local function currentDay()
     if vanaTimeAddress == nil or vanaTimeAddress <= 0 then
         local found = tonumber(safe(0, function()
@@ -455,24 +492,43 @@ local function cast(spell, expectedTarget)
     if actualTarget == nil then
         return false, targetError;
     end
-    if actualTarget.index ~= expectedTarget.index
-        or actualTarget.serverId ~= expectedTarget.serverId
-        or actualTarget.name ~= expectedTarget.name
-        or actualTarget.zone ~= expectedTarget.zone
-    then
+    if not targetMatches(expectedTarget, actualTarget) then
         return false, 'Target changed during selection; no spell was queued.';
+    end
+
+    local pending = pendingRequest;
+    if pending == nil or not targetMatches(pending.target, expectedTarget) then
+        return false, 'Pending spell identity changed before submission; no retry was armed.';
     end
 
     local chatManager = safe(nil, function() return AshitaCore:GetChatManager(); end);
     if chatManager == nil then
         return false, 'Ashita chat manager is unavailable; no spell was queued.';
     end
+
+    -- Keep a prior submission recognizable until the instant this replacement
+    -- is sent. A late category-8 acknowledgment can then still cancel the
+    -- retry instead of allowing two casts from one pending request.
+    pending.awaitingStart = false;
+    pending.spellId = nil;
+    pending.spellName = nil;
+    pending.ackDeadline = nil;
+    pending.sawCastBar = false;
     local ok = pcall(function()
         chatManager:QueueCommand(1, string.format('/ma "%s" %s', spell.name, expectedTarget.token));
     end);
     if not ok then
         return false, 'Ashita rejected the queued spell command.';
     end
+
+    local now = clockNow();
+    pending.attempts = pending.attempts + 1;
+    pending.awaitingStart = true;
+    pending.spellId = spell.id;
+    pending.spellName = spell.name;
+    pending.ackDeadline = math.min(pending.expiresAt, now + START_ACK_SECONDS);
+    pending.notBefore = math.max(pending.notBefore, pending.ackDeadline);
+    pending.sawCastBar = false;
     return true, nil;
 end
 
@@ -480,13 +536,13 @@ local function chooseDay(target)
     local day, dayError = currentDay();
     if day == nil then
         message(dayError, true);
-        return;
+        return false;
     end
 
     local ready, readyError = readySpells(target.memory);
     if ready == nil then
         message(readyError, true);
-        return;
+        return false;
     end
 
     local best = nil;
@@ -507,15 +563,16 @@ local function chooseDay(target)
     best = best or fallback;
     if best == nil then
         message(string.format('No ready %s spell is learned for %s.', day.element, day.day), true);
-        return;
+        return false;
     end
 
     local queued, queueError = cast(best, target);
     if not queued then
         message(queueError, true);
-        return;
+        return false;
     end
-    message(string.format('%s (%s): queued %s.', day.day, day.element, best.name), false);
+    message(string.format('%s (%s): submitted %s.', day.day, day.element, best.name), false);
+    return true;
 end
 
 local function weaknessProfile(target)
@@ -552,13 +609,13 @@ local function chooseWeakness(target)
     local profile, profileError = weaknessProfile(target);
     if profile == nil then
         message(profileError, true);
-        return;
+        return false;
     end
 
     local ready, readyError = readySpells(target.memory);
     if ready == nil then
         message(readyError, true);
-        return;
+        return false;
     end
 
     local bestByElement = {};
@@ -588,7 +645,7 @@ local function chooseWeakness(target)
     end
     if #candidates == 0 then
         message('No ready six-element tier-line spell is available; no spell was queued.', true);
-        return;
+        return false;
     end
 
     local winner = nil;
@@ -610,9 +667,187 @@ local function chooseWeakness(target)
     local queued, queueError = cast(best, target);
     if not queued then
         message(queueError, true);
+        return false;
+    end
+    message(string.format('%s: typical family baseline submitted %s.', target.name, best.name), false);
+    return true;
+end
+
+local function executeAction(action, target)
+    if action == 'weak' then
+        return chooseWeakness(target);
+    end
+    return chooseDay(target);
+end
+
+local function cancelPendingRequest(reason)
+    pendingRequest = nil;
+    lastPresentAt = nil;
+    if reason ~= nil then
+        message(reason, true);
+    end
+end
+
+local function processPendingRequest()
+    if pendingRequest == nil then
         return;
     end
-    message(string.format('%s: typical family baseline queued %s.', target.name, best.name), false);
+
+    local now = clockNow();
+    if lastPresentAt ~= nil
+        and now >= lastPresentAt
+        and now - lastPresentAt < PRESENT_THROTTLE_SECONDS
+    then
+        return;
+    end
+    lastPresentAt = now;
+
+    local pending = pendingRequest;
+    if now >= pending.expiresAt then
+        cancelPendingRequest('Pending spell request expired; no spell was submitted.');
+        return;
+    end
+
+    local configuredToken = configuredTargetToken();
+    if configuredToken ~= pending.target.token then
+        cancelPendingRequest('Target setting changed while the spell request was pending; no spell was submitted.');
+        return;
+    end
+
+    local actualTarget, targetError = currentTarget(pending.target.token);
+    if actualTarget == nil then
+        cancelPendingRequest(targetError);
+        return;
+    end
+    if not targetMatches(pending.target, actualTarget) then
+        cancelPendingRequest('Target changed while the spell request was pending; no spell was submitted.');
+        return;
+    end
+
+    local busy, castBarError = castBarState(actualTarget.memory);
+    if busy == nil then
+        cancelPendingRequest(castBarError);
+        return;
+    end
+    if busy then
+        pending.notBefore = math.max(pending.notBefore, now + POST_CAST_LOCK_SECONDS);
+        if pending.awaitingStart then
+            pending.sawCastBar = true;
+        end
+        return;
+    end
+
+    if pending.awaitingStart then
+        if pending.sawCastBar then
+            cancelPendingRequest('A cast began without a matching OddCast spell confirmation; the pending request was canceled.');
+            return;
+        end
+        if pending.ackDeadline ~= nil then
+            if now < pending.ackDeadline then
+                return;
+            end
+            if pending.attempts >= MAX_SUBMISSIONS then
+                cancelPendingRequest('The client did not start the queued spell after four bounded submissions.');
+                return;
+            end
+            -- Retain awaitingStart and the prior spell identity throughout the
+            -- retry lock so a slightly late action packet still prevents a
+            -- duplicate. cast() clears it immediately before the next send.
+            pending.ackDeadline = nil;
+            pending.notBefore = math.max(pending.notBefore, now + RETRY_LOCK_SECONDS);
+            message('No spell start was confirmed; the pending request will retry.', true);
+        end
+    end
+    if now < pending.notBefore then
+        return;
+    end
+
+    local submitted = executeAction(pending.action, actualTarget);
+    if not submitted and pendingRequest == pending then
+        cancelPendingRequest(nil);
+    end
+end
+
+local function requestAction(action, target)
+    local busy, castBarError = castBarState(target.memory);
+    if busy == nil then
+        cancelPendingRequest(castBarError);
+        return;
+    end
+
+    local now = clockNow();
+    local previous = pendingRequest;
+    local replaced = previous ~= nil;
+    local inheritedNotBefore = previous and previous.notBefore or now;
+    local inheritedAwaitingStart = previous and previous.awaitingStart or false;
+    local inheritedSawCastBar = previous and previous.sawCastBar or false;
+    if inheritedAwaitingStart and busy then
+        inheritedSawCastBar = true;
+    end
+    pendingRequest = {
+        action = action,
+        target = {
+            index = target.index,
+            serverId = target.serverId,
+            name = target.name,
+            zone = target.zone,
+            token = target.token,
+        },
+        expiresAt = now + PENDING_REQUEST_TTL_SECONDS,
+        notBefore = math.max(inheritedNotBefore, busy and (now + POST_CAST_LOCK_SECONDS) or now),
+        attempts = previous and previous.attempts or 0,
+        awaitingStart = inheritedAwaitingStart,
+        spellId = inheritedAwaitingStart and previous.spellId or nil,
+        spellName = inheritedAwaitingStart and previous.spellName or nil,
+        ackDeadline = inheritedAwaitingStart and previous.ackDeadline or nil,
+        sawCastBar = inheritedSawCastBar,
+    };
+    lastPresentAt = nil;
+
+    if busy or now < pendingRequest.notBefore or pendingRequest.awaitingStart then
+        local label = action == 'weak' and 'Weakness' or 'Day';
+        local prefix = replaced and 'Replaced the pending request. ' or '';
+        message(string.format('%s%s request queued; waiting for the current submission or action lock.', prefix, label), false);
+        return;
+    end
+    processPendingRequest();
+end
+
+local function confirmPendingCastStart(e)
+    local pending = pendingRequest;
+    if pending == nil or not pending.awaitingStart or e == nil or e.id ~= 0x028 then
+        return;
+    end
+
+    local memory = safe(nil, function() return AshitaCore:GetMemoryManager(); end);
+    local party = memory and safe(nil, function() return memory:GetParty(); end) or nil;
+    local playerServerId = party and tonumber(safe(nil, function()
+        return party:GetMemberServerId(0);
+    end)) or nil;
+    local actorServerId = tonumber(safe(nil, function()
+        return struct.unpack('L', e.data, 0x05 + 1);
+    end));
+    if not isPositiveInteger(playerServerId) or actorServerId ~= playerServerId then
+        return;
+    end
+
+    local category = tonumber(safe(nil, function()
+        return ashita.bits.unpack_be(e.data_raw, 10, 2, 4);
+    end));
+    if category ~= 8 then
+        return;
+    end
+    -- Category 8 stores the spell command argument in the top-level 16-bit Param field.
+    local spellId = tonumber(safe(nil, function()
+        return ashita.bits.unpack_be(e.data_raw, 10, 6, 16);
+    end));
+    if spellId ~= pending.spellId then
+        return;
+    end
+
+    local spellName = pending.spellName;
+    cancelPendingRequest(nil);
+    message(string.format('Confirmed cast start: %s.', spellName), false);
 end
 
 local function showHelp()
@@ -702,15 +937,27 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
             message(targetError, true);
             return;
         end
-        chooseWeakness(target);
+        requestAction('weak', target);
     else
         local target, targetError = currentTarget(token);
         if target == nil then
             message(targetError, true);
             return;
         end
-        chooseDay(target);
+        requestAction('day', target);
     end
+end);
+
+ashita.events.register('packet_in', 'oddcast_cast_start_cb', function(e)
+    confirmPendingCastStart(e);
+end);
+
+ashita.events.register('d3d_present', 'oddcast_pending_cast_cb', function()
+    processPendingRequest();
+end);
+
+ashita.events.register('unload', 'oddcast_unload_cb', function()
+    cancelPendingRequest(nil);
 end);
 
 ashita.events.register('load', 'oddcast_load_cb', function()

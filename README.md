@@ -1,8 +1,8 @@
 # OddCast
 
 OddCast is a small Ashita v4 addon for explicit, one-command elemental spell
-selection. It is text-command only: there is no GUI, it never casts in the
-background, and it never injects packets.
+selection. It is text-command only: there is no GUI, no automatic casting
+rotation, and no packet injection.
 
 ## Requirements
 
@@ -47,6 +47,18 @@ Ready means all of the following are true: the spell is learned, the current
 main or subjob can use it at its current level, current MP covers its cost, and
 its recast is zero.
 
+If the player is already casting, OddCast keeps exactly one pending request for
+up to 15 seconds instead of sending a command that FFXI will reject as busy. It
+waits for the cast bar to clear plus a 3.1-second post-cast lock, rechecks the
+same target identity, recalculates the highest ready spell, and submits a normal
+`/ma` command. OddCast retains the request until the player's incoming action
+packet confirms that exact spell started; an unconfirmed submission is retried
+at most four times inside the same 15-second bound. A newer `/oc day` or
+`/oc weak` replaces the not-yet-submitted intent; any already-submitted attempt
+remains the sole in-flight cast until it starts or its retry lock ends. A target or target-setting change,
+expiry, ambiguous cast start, or addon unload cancels it. This is bounded
+completion of an explicit command, not an automatic rotation.
+
 `target` controls the hostile-target token used by both cast commands. The
 default is `<t>`; `<bt>` selects Ashita's current battle target. `/oc target`
 and `/oc settings` report the current value. The setting is persisted through
@@ -57,9 +69,9 @@ fail closed; finish or cancel it before using OddCast.
 
 Missing or invalid settings, targets, spell resources, job levels, MP, recast
 data, Vana time, weakness data, or the chat command queue all fail closed and
-queue nothing. OddCast resolves the configured token first, then rechecks the
+submit nothing. OddCast resolves the configured token first, then rechecks the
 same token's zone, target index, server ID, and target name immediately before
-either command is queued. Normal FFXI checks still decide whether the queued
+either command is submitted. Normal FFXI checks still decide whether the queued
 command executes; OddCast does not claim the caster remained in range,
 unsilenced, or on the same target when the client later executes the token.
 
