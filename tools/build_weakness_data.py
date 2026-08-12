@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build and validate OddCast's exact-target static weakness dataset."""
+"""Build and validate OddCast's global mob-name static weakness dataset."""
 
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
@@ -15,30 +16,18 @@ import tempfile
 from typing import Iterable, Sequence
 
 
-SCHEMA = 1
-POLICY = "exact-spawn-v1:no-zero-position,no-missing-join,no-magic-pool-mod,no-magic-species-mod,no-direct-script,no-zone-mixin"
+SCHEMA = 2
+# AGENT_MIN: reason=OddCast intentionally models ordinary mob-family behavior;
+# ceiling=never claim live per-spawn accuracy; upgrade=add a narrow exact-name
+# override only after a reported common-family miscast.
+POLICY = "global-name-v2:all-active-joined-spawns,typical-profile,lowest-id-tie,no-zero-position,no-invalid-identity,no-missing-join"
 ELEMENTS = ("Fire", "Ice", "Wind", "Earth", "Lightning", "Water")
-MAGIC_RELEVANT_MOD_IDS = frozenset(
-    {
-        *range(15, 21),       # elemental magic evasion
-        29, 31,               # MDEF, MEVA
-        *range(54, 60),       # elemental SDT overrides
-        142,                  # all-damage null chance
-        163, 389, 831,        # capped/uncapped magic damage taken variants
-        *range(192, 198),     # elemental resistance-rank overrides
-        418,                  # Bar-element null chance
-        *range(459, 477),     # elemental absorb/null plus all-magic absorb/null
-        480,                  # all-damage absorb chance
-    }
-)
 SQL_TABLES = {
     "spawns": ("sql/mob_spawn_points.sql", "mob_spawn_points"),
     "groups": ("sql/mob_groups.sql", "mob_groups"),
     "pools": ("sql/mob_pools.sql", "mob_pools"),
     "resists": ("sql/mob_resistances.sql", "mob_resistances"),
-    "pool_mods": ("sql/mob_pool_mods.sql", "mob_pool_mods"),
-    "species_mods": ("sql/mob_species_mods.sql", "mob_species_mods"),
-    "zones": ("sql/zone_settings.sql", "zone_settings"),
+    "families": ("sql/mob_species_system.sql", "mob_family_system"),
 }
 SEMANTIC_SOURCE_FILES = (
     "scripts/enum/magic.lua",
@@ -186,6 +175,29 @@ def _text(value: object | None, label: str) -> str:
     return value
 
 
+def normalize_name(value: str) -> str:
+    """Return the shared, locale-independent lookup form used by OddCast."""
+    return " ".join(value.casefold().replace("_", " ").split())
+
+
+def _typical_profiles(
+    votes: dict[str, Counter[int]],
+) -> tuple[dict[str, int], dict[str, int]]:
+    selected: dict[str, int] = {}
+    ambiguous = 0
+    ties = 0
+    for key in sorted(votes):
+        counts = votes[key]
+        if len(counts) > 1:
+            ambiguous += 1
+        highest = max(counts.values())
+        winners = [profile_id for profile_id, count in counts.items() if count == highest]
+        if len(winners) > 1:
+            ties += 1
+        selected[key] = min(winners)
+    return selected, {"ambiguous": ambiguous, "ties": ties}
+
+
 def _unique_map(rows: Sequence[Sequence[object | None]], key_fn, value_fn, label: str):
     output = {}
     for row in rows:
@@ -199,20 +211,10 @@ def _unique_map(rows: Sequence[Sequence[object | None]], key_fn, value_fn, label
 def _source_paths(server_root: Path) -> tuple[Path, ...]:
     sql_paths = tuple(server_root / relative for relative, _ in SQL_TABLES.values())
     semantic_paths = tuple(server_root / relative for relative in SEMANTIC_SOURCE_FILES)
-    script_root = server_root / "scripts" / "zones"
-    if not script_root.is_dir():
-        raise DataError(f"zone script root is missing: {script_root}")
-    script_paths = tuple(sorted(script_root.glob("*/mobs/*.lua"), key=lambda p: p.as_posix()))
-    zone_mixin_paths = tuple(
-        sorted(
-            (server_root / "scripts" / "mixins" / "zones").glob("*.lua"),
-            key=lambda p: p.as_posix(),
-        )
-    )
     for path in sql_paths + semantic_paths:
         if not path.is_file():
             raise DataError(f"required source file is missing: {path}")
-    return sql_paths + semantic_paths + script_paths + zone_mixin_paths
+    return sql_paths + semantic_paths
 
 
 def source_identity(server_root: Path) -> tuple[str, tuple[Path, ...]]:
@@ -243,7 +245,6 @@ def _git_source_commit(server_root: Path, *, require_clean: bool) -> str:
         material = (
             [relative for relative, _ in SQL_TABLES.values()]
             + list(SEMANTIC_SOURCE_FILES)
-            + ["scripts/zones", "scripts/mixins/zones"]
         )
         status = subprocess.run(
             ["git", "-C", str(server_root), "status", "--porcelain", "--", *material],
@@ -262,12 +263,6 @@ def build_model(server_root: Path) -> dict[str, object]:
         name: read_insert_rows(server_root / relative, table)
         for name, (relative, table) in SQL_TABLES.items()
     }
-    zones = _unique_map(
-        rows["zones"],
-        lambda row: _integer(row[0], "zone id"),
-        lambda row: _text(row[4], "zone name"),
-        "zone id",
-    )
     groups = _unique_map(
         rows["groups"],
         lambda row: (_integer(row[2], "group zone"), _integer(row[0], "group id")),
@@ -277,8 +272,21 @@ def build_model(server_root: Path) -> dict[str, object]:
     pools = _unique_map(
         rows["pools"],
         lambda row: _integer(row[0], "pool id"),
-        lambda row: (_integer(row[3], "species id"), _integer(row[25], "resistance id")),
+        lambda row: (
+            _text(row[2], "pool packet name"),
+            _integer(row[3], "species id"),
+            _integer(row[25], "resistance id"),
+        ),
         "pool id",
+    )
+    families = _unique_map(
+        rows["families"],
+        lambda row: _integer(row[0], "family species id"),
+        lambda row: (
+            _text(row[1], "family name"),
+            _text(row[3], "superfamily name"),
+        ),
+        "family species id",
     )
     resists = _unique_map(
         rows["resists"],
@@ -292,31 +300,9 @@ def build_model(server_root: Path) -> dict[str, object]:
     for profile_id, profile in resists.items():
         if any(rank < -3 or rank > 11 for rank in profile[6:]):
             raise DataError(f"resistance profile {profile_id} has an out-of-range rank")
-    blocked_pools = {
-        _integer(row[0], "pool modifier pool")
-        for row in rows["pool_mods"]
-        if _integer(row[3], "pool modifier kind") == 0
-        and _integer(row[1], "pool modifier id") in MAGIC_RELEVANT_MOD_IDS
-    }
-    blocked_species = {
-        _integer(row[0], "species modifier species")
-        for row in rows["species_mods"]
-        if _integer(row[3], "species modifier kind") == 0
-        and _integer(row[1], "species modifier id") in MAGIC_RELEVANT_MOD_IDS
-    }
-    direct_scripts = {
-        path.relative_to(server_root).as_posix().casefold()
-        for path in _source_paths(server_root)
-        if "/mobs/" in path.relative_to(server_root).as_posix()
-    }
-    zone_mixins = {
-        path.stem.casefold()
-        for path in _source_paths(server_root)
-        if "/mixins/zones/" in path.relative_to(server_root).as_posix()
-    }
-
-    records: dict[int, dict[int, tuple[int, str, int]]] = {}
-    used_profiles: set[int] = set()
+    name_votes: dict[str, Counter[int]] = {}
+    family_votes: dict[str, Counter[int]] = {}
+    included_targets = 0
     excluded: dict[str, int] = {}
 
     def reject(reason: str) -> None:
@@ -334,44 +320,43 @@ def build_model(server_root: Path) -> dict[str, object]:
         if all(_number(row[index], "spawn position") == 0 for index in (7, 8, 9)):
             reject("zero-position")
             continue
-        zone_name = zones.get(zone)
         group_id = _integer(row[4], "spawn group")
         pool_id = groups.get((zone, group_id))
         pool = pools.get(pool_id) if pool_id is not None else None
-        if zone_name is None or pool is None:
+        if pool is None:
             reject("missing-join")
             continue
-        if zone_name.casefold() in zone_mixins:
-            reject("zone-mixin")
-            continue
-        species_id, resist_id = pool
+        packet_name, species_id, resist_id = pool
         profile = resists.get(resist_id)
         if profile is None:
             reject("missing-join")
             continue
-        if pool_id in blocked_pools:
-            reject("magic-pool-modifier")
-            continue
-        if species_id in blocked_species:
-            reject("magic-species-modifier")
-            continue
-        mob_name = _text(row[2], "mob script name")
-        expected_script = f"scripts/zones/{zone_name}/mobs/{mob_name}.lua".casefold()
-        if expected_script in direct_scripts:
-            reject("direct-script")
-            continue
         display_name = _text(row[3], "mob display name")
-        zone_records = records.setdefault(zone, {})
-        if target_index in zone_records:
-            raise DataError(f"duplicate exact target identity: zone={zone} index={target_index}")
-        zone_records[target_index] = (mob_id, display_name, resist_id)
-        used_profiles.add(resist_id)
+        normalized_names = {normalize_name(display_name), normalize_name(packet_name)}
+        for name in normalized_names:
+            name_votes.setdefault(name, Counter())[resist_id] += 1
+        family = families.get(species_id)
+        if family is not None:
+            for prefix in {normalize_name(family[0]), normalize_name(family[1])}:
+                family_votes.setdefault(prefix, Counter())[resist_id] += 1
+        included_targets += 1
 
-    if not records:
-        raise DataError("source policy produced no safe target records")
+    if not name_votes:
+        raise DataError("source policy produced no global mob-name records")
+    names, name_ambiguity = _typical_profiles(name_votes)
+    family_prefixes, family_ambiguity = _typical_profiles(family_votes)
+    used_profiles = set(names.values()) | set(family_prefixes.values())
     return {
         "profiles": {profile_id: resists[profile_id] for profile_id in sorted(used_profiles)},
-        "records": {zone: records[zone] for zone in sorted(records)},
+        "names": names,
+        "familyPrefixes": family_prefixes,
+        "ambiguityCounts": {
+            "name": name_ambiguity["ambiguous"],
+            "nameTie": name_ambiguity["ties"],
+            "familyPrefix": family_ambiguity["ambiguous"],
+            "familyPrefixTie": family_ambiguity["ties"],
+        },
+        "includedTargets": included_targets,
         "excluded": dict(sorted(excluded.items())),
         "sourceRows": len(rows["spawns"]),
     }
@@ -390,38 +375,10 @@ def _header(source_commit: str, source_sha256: str) -> list[str]:
     ]
 
 
-def _render_zone(zone: int, records: dict[int, tuple[int, str, int]], source_commit: str, source_sha256: str) -> bytes:
-    lines = _header(source_commit, source_sha256) + [
-        "return {",
-        f"  schema={SCHEMA},",
-        f"  zone={zone},",
-        f"  sourceSha256={_lua_string(source_sha256)},",
-        "  records={",
-    ]
-    for target_index, (server_id, name, profile_id) in sorted(records.items()):
-        lines.append(f"    [{target_index}]={{{server_id},{_lua_string(name)},{profile_id}}},")
-    lines.extend(("  },", "}", ""))
-    return "\n".join(lines).encode("utf-8")
-
-
 def render_artifacts(server_root: Path, *, require_clean: bool = True) -> tuple[dict[str, bytes], dict[str, object]]:
     source_sha256, source_paths = source_identity(server_root)
     source_commit = _git_source_commit(server_root, require_clean=require_clean)
     model = build_model(server_root)
-    records = model["records"]
-    assert isinstance(records, dict)
-    zone_bytes = {
-        f"weakness_data/{zone}.lua": _render_zone(zone, zone_records, source_commit, source_sha256)
-        for zone, zone_records in records.items()
-    }
-    zone_rows = {
-        zone: {
-            "path": f"weakness_data/{zone}.lua",
-            "sha256": "sha256:" + hashlib.sha256(zone_bytes[f"weakness_data/{zone}.lua"]).hexdigest(),
-            "count": len(zone_records),
-        }
-        for zone, zone_records in records.items()
-    }
     lines = _header(source_commit, source_sha256) + [
         "return {",
         f"  schema={SCHEMA},",
@@ -433,19 +390,24 @@ def render_artifacts(server_root: Path, *, require_clean: bool = True) -> tuple[
     assert isinstance(profiles, dict)
     for profile_id, profile in profiles.items():
         lines.append(f"    [{profile_id}]={{{','.join(str(value) for value in profile)}}},")
-    lines.extend(("  },", "  zoneFiles={"))
-    for zone, entry in zone_rows.items():
-        lines.append(
-            f"    [{zone}]={{path={_lua_string(entry['path'])},sha256={_lua_string(entry['sha256'])},count={entry['count']}}},"
-        )
+    lines.extend(("  },", "  names={"))
+    names = model["names"]
+    assert isinstance(names, dict)
+    for name, profile_id in names.items():
+        lines.append(f"    [{_lua_string(name)}]={profile_id},")
+    lines.extend(("  },", "  familyPrefixes={"))
+    family_prefixes = model["familyPrefixes"]
+    assert isinstance(family_prefixes, dict)
+    for prefix, profile_id in family_prefixes.items():
+        lines.append(f"    [{_lua_string(prefix)}]={profile_id},")
     lines.extend(("  },", "}", ""))
     index_bytes = "\n".join(lines).encode("utf-8")
-    artifacts = {"weakness_data.lua": index_bytes, **zone_bytes}
+    artifacts = {"weakness_data.lua": index_bytes}
     file_rows = [
         {
             "path": path,
             "sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
-            "count": zone_rows[int(Path(path).stem)]["count"] if path.startswith("weakness_data/") else None,
+            "count": None,
         }
         for path, data in sorted(artifacts.items())
     ]
@@ -459,9 +421,11 @@ def render_artifacts(server_root: Path, *, require_clean: bool = True) -> tuple[
         "dataLicense": "GPL-3.0-or-later",
         "materialInputCount": len(source_paths),
         "sourceSpawnCount": model["sourceRows"],
-        "includedTargetCount": sum(len(value) for value in records.values()),
+        "includedTargetCount": model["includedTargets"],
+        "nameCount": len(names),
+        "familyPrefixCount": len(family_prefixes),
         "profileCount": len(profiles),
-        "zoneCount": len(records),
+        "ambiguityCounts": model["ambiguityCounts"],
         "excluded": model["excluded"],
         "files": file_rows,
     }
@@ -531,7 +495,8 @@ def validate_output(output_root: Path, *, luajit: str | None = None) -> dict[str
         "sourceSpawnCount",
         "includedTargetCount",
         "profileCount",
-        "zoneCount",
+        "nameCount",
+        "familyPrefixCount",
     )
     if any(
         not isinstance(manifest.get(key), int) or manifest[key] <= 0
@@ -551,7 +516,7 @@ def validate_output(output_root: Path, *, luajit: str | None = None) -> dict[str
         relative = row["path"]
         if relative == "weakness_data.lua":
             pass
-        elif re.fullmatch(r"weakness_data/[1-9][0-9]*\.lua", relative) is None:
+        else:
             raise DataError(f"unsafe weakness data path: {relative}")
         if relative in expected:
             raise DataError(f"duplicate weakness data path: {relative}")
@@ -570,13 +535,6 @@ def validate_output(output_root: Path, *, luajit: str | None = None) -> dict[str
             or not text.startswith("-- SPDX-License-Identifier: GPL-3.0-or-later\n")
         ):
             raise DataError(f"weakness data source identity mismatch: {relative}")
-        if relative.startswith("weakness_data/"):
-            zone = int(Path(relative).stem)
-            if f"  schema={SCHEMA},\n  zone={zone},\n" not in text:
-                raise DataError(f"weakness data zone identity mismatch: {relative}")
-            count = len(re.findall(r"^    \[[0-9]+\]=\{", text, re.MULTILINE))
-            if row.get("count") != count:
-                raise DataError(f"weakness data count mismatch: {relative}")
         compiled.append(path)
     if "weakness_data.lua" not in file_rows:
         raise DataError("weakness data index is not inventoried")
@@ -584,36 +542,22 @@ def validate_output(output_root: Path, *, luajit: str | None = None) -> dict[str
     if "  elements={'Fire','Ice','Wind','Earth','Lightning','Water'},\n" not in index_text:
         raise DataError("weakness data index element order is invalid")
     try:
-        profile_block = index_text.split("  profiles={\n", 1)[1].split(
-            "  },\n  zoneFiles={\n", 1
-        )[0]
+        profile_block = index_text.split("  profiles={\n", 1)[1].split("  },\n  names={\n", 1)[0]
+        name_block = index_text.split("  names={\n", 1)[1].split("  },\n  familyPrefixes={\n", 1)[0]
+        family_block = index_text.split("  familyPrefixes={\n", 1)[1].split("  },\n}", 1)[0]
     except IndexError as error:
         raise DataError("weakness data index structure is invalid") from error
     profile_count = len(re.findall(r"^    \[[0-9]+\]=\{", profile_block, re.MULTILINE))
     if profile_count != manifest["profileCount"]:
         raise DataError("weakness data profile count mismatch")
-    index_zones = {
-        int(zone): {"path": path, "sha256": sha256, "count": int(count)}
-        for zone, path, sha256, count in re.findall(
-            r"^    \[([0-9]+)\]=\{path='([^']+)',sha256='([^']+)',count=([0-9]+)\},$",
-            index_text,
-            re.MULTILINE,
-        )
-    }
-    manifest_zones = {
-        int(Path(path).stem): {
-            "path": path,
-            "sha256": row["sha256"],
-            "count": row["count"],
-        }
-        for path, row in file_rows.items()
-        if path.startswith("weakness_data/")
-    }
-    if index_zones != manifest_zones or len(index_zones) != manifest["zoneCount"]:
-        raise DataError("weakness data index/zone inventory mismatch")
-    if sum(row["count"] for row in manifest_zones.values()) != manifest["includedTargetCount"]:
-        raise DataError("weakness data included target count mismatch")
-    if len(manifest["files"]) != manifest["zoneCount"] + 1:
+    if len(re.findall(r"^    \['(?:[^'\\]|\\.)+'\]=[0-9]+,$", name_block, re.MULTILINE)) != manifest["nameCount"]:
+        raise DataError("weakness data name count mismatch")
+    if len(re.findall(r"^    \['(?:[^'\\]|\\.)+'\]=[0-9]+,$", family_block, re.MULTILINE)) != manifest["familyPrefixCount"]:
+        raise DataError("weakness data family-prefix count mismatch")
+    ambiguity = manifest.get("ambiguityCounts")
+    if not isinstance(ambiguity, dict) or set(ambiguity) != {"name", "nameTie", "familyPrefix", "familyPrefixTie"} or any(not isinstance(value, int) or value < 0 for value in ambiguity.values()):
+        raise DataError("weakness data ambiguity counts are invalid")
+    if len(manifest["files"]) != 1:
         raise DataError("weakness data file count mismatch")
     actual = _generated_inventory(output_root)
     if actual != expected:
@@ -669,7 +613,9 @@ def main() -> int:
             "sourceSha256": manifest["sourceSha256"],
             "includedTargetCount": manifest["includedTargetCount"],
             "profileCount": manifest["profileCount"],
-            "zoneCount": manifest["zoneCount"],
+            "nameCount": manifest["nameCount"],
+            "familyPrefixCount": manifest["familyPrefixCount"],
+            "ambiguityCounts": manifest["ambiguityCounts"],
             "excluded": manifest["excluded"],
         }, sort_keys=True))
         return 0

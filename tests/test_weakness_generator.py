@@ -91,6 +91,17 @@ def _server_fixture(tmp_path: Path) -> Path:
     )
     _write_table(
         server,
+        "sql/mob_species_system.sql",
+        "mob_family_system",
+        [
+            (1, "Rabbit", 10, "Beast"),
+            (2, "Slime", 20, "Amorph"),
+            (3, "Bee", 30, "Vermin"),
+            (4, "Orc", 40, "Beastman"),
+        ],
+    )
+    _write_table(
+        server,
         "sql/mob_pool_mods.sql",
         "mob_pool_mods",
         [(10, 36, 40, 1), (20, 831, 10, 0)],
@@ -141,26 +152,46 @@ def test_sql_parser_handles_escaped_apostrophes_and_numeric_positions(tmp_path: 
     )
 
 
-def test_model_uses_exact_join_and_conservatively_excludes_dynamic_rows(tmp_path: Path) -> None:
+def test_model_votes_across_dynamic_rows_and_excludes_only_inactive_or_unjoined(tmp_path: Path) -> None:
     server = _server_fixture(tmp_path)
     model = generator.build_model(server)
-    safe_id = (100 << 12) | 321
-    assert model["records"] == {
-        100: {321: (safe_id, "Proof Rabbit's Echo", 1)}
+    assert model["names"] == {
+        "pool 10": 1,
+        "pool 20": 1,
+        "pool 30": 1,
+        "pool 40": 1,
+        "pool mod": 1,
+        "proof rabbit's echo": 1,
+        "scripted mob": 1,
+        "species mod": 1,
+    }
+    assert model["familyPrefixes"] == {
+        "amorph": 1,
+        "beast": 1,
+        "beastman": 1,
+        "bee": 1,
+        "orc": 1,
+        "rabbit": 1,
+        "slime": 1,
+        "vermin": 1,
     }
     assert model["profiles"] == {
         1: (1000, 0, -1000, 0, 500, 0, -1, 0, 1, 2, 3, 4)
     }
+    assert model["includedTargets"] == 4
+    assert model["ambiguityCounts"] == {
+        "name": 0,
+        "nameTie": 0,
+        "familyPrefix": 0,
+        "familyPrefixTie": 0,
+    }
     assert model["excluded"] == {
-        "direct-script": 1,
         "missing-join": 1,
-        "magic-pool-modifier": 1,
-        "magic-species-modifier": 1,
         "zero-position": 1,
     }
 
 
-def test_split_artifacts_are_deterministic_hash_bound_and_mutation_sensitive(
+def test_single_artifact_is_deterministic_hash_bound_and_mutation_sensitive(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     server = _server_fixture(tmp_path)
@@ -175,11 +206,11 @@ def test_split_artifacts_are_deterministic_hash_bound_and_mutation_sensitive(
     assert first_manifest == second_manifest
     assert set(first) == {
         "weakness_data.lua",
-        "weakness_data/100.lua",
         "weakness_data_manifest.json",
     }
-    assert first_manifest["includedTargetCount"] == 1
-    assert first_manifest["zoneCount"] == 1
+    assert first_manifest["includedTargetCount"] == 4
+    assert first_manifest["nameCount"] == 8
+    assert first_manifest["familyPrefixCount"] == 8
     assert first_manifest["profileCount"] == 1
     assert first["weakness_data.lua"].startswith(
         b"-- SPDX-License-Identifier: GPL-3.0-or-later\n"
@@ -191,17 +222,14 @@ def test_split_artifacts_are_deterministic_hash_bound_and_mutation_sensitive(
     assert validated == first_manifest
     generator.check_artifacts(output, first)
 
-    zone_path = output / "weakness_data" / "100.lua"
-    zone_path.write_bytes(zone_path.read_bytes() + b"-- drift\n")
+    index_path = output / "weakness_data.lua"
+    index_path.write_bytes(index_path.read_bytes() + b"-- drift\n")
     with pytest.raises(generator.DataError, match="hash mismatch"):
         generator.validate_output(output)
 
     generator.write_artifacts(output, first)
-    index_path = output / "weakness_data.lua"
     index_path.write_text(
-        index_path.read_text(encoding="utf-8").replace(
-            first_manifest["files"][1]["sha256"], "sha256:" + "f" * 64
-        ),
+        index_path.read_text(encoding="utf-8").replace("  names={\n", "  mobNames={\n"),
         encoding="utf-8",
         newline="\n",
     )
@@ -215,18 +243,23 @@ def test_split_artifacts_are_deterministic_hash_bound_and_mutation_sensitive(
         encoding="utf-8",
         newline="\n",
     )
-    with pytest.raises(generator.DataError, match="index/zone inventory mismatch"):
+    with pytest.raises(generator.DataError, match="index structure is invalid"):
         generator.validate_output(output)
 
 
-def test_duplicate_exact_target_identity_fails_closed(tmp_path: Path) -> None:
-    server = _server_fixture(tmp_path)
-    spawn_path = server / "sql" / "mob_spawn_points.sql"
-    text = spawn_path.read_text(encoding="utf-8")
-    first_insert = text.splitlines()[0]
-    spawn_path.write_text(text + first_insert + "\n", encoding="utf-8", newline="\n")
-    with pytest.raises(generator.DataError, match="duplicate exact target identity"):
-        generator.build_model(server)
+def test_typical_profile_prefers_frequency_then_lowest_id() -> None:
+    selected, counts = generator._typical_profiles(
+        {
+            "common": generator.Counter({2: 3, 1: 1}),
+            "tie": generator.Counter({3: 2, 2: 2}),
+        }
+    )
+    assert selected == {"common": 2, "tie": 2}
+    assert counts == {"ambiguous": 2, "ties": 1}
+
+
+def test_name_normalization_is_lowercase_whitespace_and_underscore_stable() -> None:
+    assert generator.normalize_name("  Proof_RABBIT  Echo ") == "proof rabbit echo"
 
 
 def test_clean_source_gate_covers_every_material_source_surface(
@@ -245,8 +278,5 @@ def test_clean_source_gate_covers_every_material_source_surface(
     material = calls[1][calls[1].index("--") + 1 :]
     assert set(relative for relative, _table in generator.SQL_TABLES.values()) <= set(material)
     assert set(generator.SEMANTIC_SOURCE_FILES) <= set(material)
-    assert {"scripts/zones", "scripts/mixins/zones"} <= set(material)
-
-
-def test_magic_modifier_policy_includes_damage_and_null_variants() -> None:
-    assert {142, 418, 831} <= generator.MAGIC_RELEVANT_MOD_IDS
+    assert "scripts/zones" not in material
+    assert "scripts/mixins/zones" not in material

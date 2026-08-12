@@ -11,8 +11,7 @@ background, and it never injects packets.
   Vana time signature)
 
 Copy the complete `addons\oddcast` directory to `Ashita\addons\oddcast`. The
-installed copy must include `oddcast.lua`, `weakness_data.lua`, and every
-generated `weakness_data\<zone>.lua` file. Then run:
+installed copy must include `oddcast.lua` and `weakness_data.lua`. Then run:
 
 ```text
 /addon load oddcast
@@ -36,13 +35,13 @@ generated `weakness_data\<zone>.lua` file. Then run:
 ready single-target spell of that element. For the six standard tier lines,
 base power rises with tier, so this selects the highest available tier.
 
-`weak` uses generated CatsEye static resistance data for the exact target's
-zone, target index, server ID, and display name. It picks the highest ready
-spell in each of the six standard elemental tier lines, then compares each
-candidate's `base power * clamp(10000 + elemental SDT, 0, 30000)` baseline and
-resistance rank. Lower rank is better. A spell is queued only when one
-candidate is no worse on both measures and strictly better on at least one
-measure than every other candidate. Ties and potency/rank tradeoffs fail closed.
+`weak` looks up the target's normalized mob name in one global CatsEye-derived
+table, with typical family prefixes as a fallback. It is independent of zone:
+a Damselfly uses the Fly profile everywhere and an ordinary Goblin uses the
+Goblin profile everywhere. When source variants disagree, the most common
+profile wins; the lowest profile ID breaks an exact vote tie. OddCast chooses
+the available element with the best resistance rank, then the strongest
+`base power * elemental SDT` spell within that rank.
 
 Ready means all of the following are true: the spell is learned, the current
 main or subjob can use it at its current level, current MP covers its cost, and
@@ -64,15 +63,11 @@ either command is queued. Normal FFXI checks still decide whether the queued
 command executes; OddCast does not claim the caster remained in range,
 unsilenced, or on the same target when the client later executes the token.
 
-The displayed result is a **static baseline recommendation**, not an actual
-damage prediction. The generated index records its pinned CatsEye source
-SHA-256 and the expected SHA-256 of each split zone file; offline validation
-checks those file hashes. The Ashita runtime validates matching schemas, source
-identity, zone metadata, record counts, and exact target identity, but has no
-built-in SHA-256 implementation and therefore does not hash files in-game.
-Live INT/MEVA, buffs, gear, day/weather, status, range, and runtime-scripted
-resistance changes remain outside this static model. Targets without a safe
-static record must be omitted by the data generator and fail closed at runtime.
+The displayed result is a **typical family baseline**, not an actual damage
+prediction. The one generated table records its pinned CatsEye source SHA-256;
+offline validation checks its hash, schema, names, family prefixes, profiles,
+and deterministic ambiguity counts. Live INT/MEVA, buffs, gear, day/weather,
+status, range, and special scripted behavior remain outside this simple model.
 
 Weakness selection remains limited to the six standard single-target INT tier
 lines. AoE, ancient magic, divine/light, helix damage-over-time, Drain, and
@@ -93,26 +88,23 @@ luajit -b addons/oddcast/oddcast.lua oddcast.luac
 The optional CatsEye source-parity test is skipped when a sibling CatsEye
 server checkout is unavailable. Set `CATSEYE_SERVER_ROOT` to run that check
 against an explicit checkout. Maintainers regenerate and byte-validate the
-split target data with:
+global mob table with:
 
 ```text
 python tools/build_weakness_data.py --server-root <path-to-catseyexi> --luajit <path-to-luajit>
 python tools/build_weakness_data.py --server-root <path-to-catseyexi> --check
 ```
 
-The generator uses the exact spawn-to-group-to-pool-to-resistance join. It
-omits inactive or incomplete rows, direct scripted mobs, zones with automatic
-mixins, and pools or species with magic-affecting modifier overrides. The
-checked-in manifest partitions every source spawn into one included or excluded
-reason and binds the exact source commit, material-input hash, generator hash,
-per-file hashes, counts, and inventory. These checks do not install the addon
-or issue game commands. Personal-use testing can be performed in your own
+The generator joins active spawns to pools, families, and resistance profiles,
+then selects the typical profile for each normalized mob name and family label.
+The checked-in manifest binds the source commit, material-input hash, generator
+hash, table hash, counts, and ambiguity totals. These checks do not install the
+addon or issue game commands. Personal-use testing can be performed in your own
 client; distribution remains subject to the server's addon approval policy.
 
 ## Licensing
 
 OddCast's handwritten addon and tooling are MIT licensed. The generated
-`weakness_data.lua`, `weakness_data_manifest.json`, and
-`weakness_data\*.lua` files are derived from the pinned CatsEye server source
-and are GPL-3.0-or-later. See `THIRD_PARTY_NOTICES.md` and
-`LICENSE-DATA-GPL-3.0`.
+`weakness_data.lua` and `weakness_data_manifest.json` are derived from the
+pinned CatsEye server source and are GPL-3.0-or-later. See
+`THIRD_PARTY_NOTICES.md` and `LICENSE-DATA-GPL-3.0`.

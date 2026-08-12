@@ -264,7 +264,7 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
     )
 
 
-def test_oddcast_weakness_exact_lookup_and_dominance_contract(tmp_path: Path) -> None:
+def test_oddcast_global_mob_weakness_selection_contract(tmp_path: Path) -> None:
     luajit = shutil.which("luajit")
     assert luajit is not None
     assert ODDCAST_PATH.is_file()
@@ -350,20 +350,16 @@ def test_oddcast_weakness_exact_lookup_and_dominance_contract(tmp_path: Path) ->
                 "}",
                 "local function indexData(profile)",
                 "    return {",
-                "        schema=1, sourceSha256=sourceSha, elements=elements, profiles={ [7]=profile },",
-                "        zoneFiles={ [100]={ path='weakness_data/100.lua', sha256=fileSha, count=1 } },",
+                "        schema=2, sourceSha256=sourceSha, elements=elements, profiles={ [7]=profile },",
+                "        names={ ['proof rabbit']=7 }, familyPrefixes={ ['rabbit']=7 },",
                 "    }",
                 "end",
-                "local function zoneData(record, declaredZone)",
-                "    return { schema=1, zone=declaredZone or 100, sourceSha256=sourceSha, records={ [321]=record } }",
-                "end",
-                "local function reset(indexValue, zoneValue)",
+                "local function reset(indexValue)",
                 "    callbacks, queued, output, dataFiles, loadCounts = {}, {}, {}, {}, {}",
                 "    targetIndex, targetServerId, targetName, targetZone = 321, 123456, 'Proof Rabbit', 100",
                 "    known = { [147]=true, [148]=true, [153]=true, [158]=true, [163]=true, [168]=true, [173]=true }",
                 "    timers, mutateTarget = {}, false",
                 "    if indexValue ~= nil then dataFiles['fixture/weakness_data.lua'] = indexValue end",
-                "    if zoneValue ~= nil then dataFiles['fixture/weakness_data/100.lua'] = zoneValue end",
                 "    addon = { path='fixture/' }",
                 "    realDofile(ODDCAST_PATH)",
                 "end",
@@ -373,63 +369,56 @@ def test_oddcast_weakness_exact_lookup_and_dominance_contract(tmp_path: Path) ->
                 "    assert(event.blocked == true, 'OddCast command was not blocked')",
                 "end",
                 "local dominant = { 10000, -5000, -5000, -5000, -5000, -5000, 0, 1, 1, 1, 1, 1 }",
-                "reset(indexData(dominant), zoneData({123456, 'Proof Rabbit', 7}))",
+                "reset(indexData(dominant))",
                 "invoke('/oc', 'weak')",
                 "assert(#queued == 1 and queued[1].command == '/ma \"Fire V\" <t>', 'exact dominant lookup did not choose Fire V')",
                 "invoke('/oddcast', 'weakness')",
                 "assert(#queued == 2 and queued[2].command == '/ma \"Fire V\" <t>', 'weakness alias did not choose Fire V')",
                 "assert(loadCounts['fixture/weakness_data.lua'] == 1, 'weakness index was not cached')",
-                "assert(loadCounts['fixture/weakness_data/100.lua'] == 1, 'current zone data was not cached')",
                 "timers[148] = 1",
                 "invoke('/oc', 'weak')",
                 "assert(#queued == 3 and queued[3].command == '/ma \"Fire IV\" <t>', 'weakness did not use the highest ready tier per element')",
                 "local sawClaim = false",
-                "for _, line in ipairs(output) do if string.find(line, 'static baseline recommendation', 1, true) then sawClaim=true end end",
-                "assert(sawClaim, 'success output omitted the static baseline recommendation boundary')",
-                "reset(indexData(dominant), zoneData({999999, 'Proof Rabbit', 7}))",
+                "for _, line in ipairs(output) do if string.find(line, 'typical family baseline', 1, true) then sawClaim=true end end",
+                "assert(sawClaim, 'success output omitted the typical family boundary')",
+                "reset(indexData(dominant))",
+                "targetZone = 199",
                 "invoke('/oc', 'weak')",
-                "assert(#queued == 0, 'server-ID mismatch queued a spell')",
-                "reset(indexData(dominant), zoneData({123456, 'Wrong Rabbit', 7}))",
-                "invoke('/oc', 'weak')",
-                "assert(#queued == 0, 'name mismatch queued a spell')",
-                "reset(indexData(dominant), zoneData({123456, 'Proof Rabbit', 7}, 101))",
-                "invoke('/oc', 'weak')",
-                "assert(#queued == 0, 'zone mismatch queued a spell')",
-                "local malformed = indexData(dominant); malformed.schema = 2",
-                "reset(malformed, zoneData({123456, 'Proof Rabbit', 7}))",
+                "assert(#queued == 1 and queued[1].command == '/ma \"Fire V\" <t>', 'zone changed the mob-family weakness lookup')",
+                "local malformed = indexData(dominant); malformed.schema = 1",
+                "reset(malformed)",
                 "invoke('/oc', 'weak')",
                 "assert(#queued == 0, 'malformed index queued a spell')",
                 "local missingField = { 10000, -5000, -5000, -5000, -5000, -5000, 0, 1, 1, 1, 1 }",
-                "reset(indexData(missingField), zoneData({123456, 'Proof Rabbit', 7}))",
+                "reset(indexData(missingField))",
                 "invoke('/oc', 'weak')",
                 "assert(#queued == 0, 'profile with a missing field queued a spell')",
                 "local outOfRangeRank = { 0, 0, 0, 0, 0, 0, -4, -3, 0, 0, 0, 0 }",
-                "reset(indexData(outOfRangeRank), zoneData({123456, 'Proof Rabbit', 7}))",
+                "reset(indexData(outOfRangeRank))",
                 "known = { [148]=true, [153]=true }",
                 "invoke('/oc', 'weak')",
                 "assert(#queued == 0, 'out-of-range resistance rank was compared instead of rejected')",
                 "local tied = { 625, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }",
-                "reset(indexData(tied), zoneData({123456, 'Proof Rabbit', 7}))",
+                "reset(indexData(tied))",
                 "known = { [148]=true, [153]=true }",
                 "invoke('/oc', 'weak')",
-                "assert(#queued == 0, 'equal baseline/rank tie queued a spell')",
+                "assert(#queued == 1 and queued[1].command == '/ma \"Blizzard V\" <t>', 'equal baseline/rank tie was not broken by spell power')",
                 "local tradeoff = { 10000, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0 }",
-                "reset(indexData(tradeoff), zoneData({123456, 'Proof Rabbit', 7}))",
+                "reset(indexData(tradeoff))",
                 "known = { [148]=true, [153]=true }",
                 "invoke('/oc', 'weak')",
-                "assert(#queued == 0, 'potency/rank tradeoff queued a spell')",
-                "reset(indexData(dominant), zoneData({123456, 'Proof Rabbit', 7}))",
+                "assert(#queued == 1 and queued[1].command == '/ma \"Blizzard V\" <t>', 'best resistance rank did not win the potency tradeoff')",
+                "reset(indexData(dominant))",
                 "mutateTarget = true",
                 "invoke('/oc', 'weak')",
                 "assert(#queued == 0, 'target identity mutation queued a spell')",
-                "reset(nil, nil)",
+                "reset(nil)",
                 "invoke('/oc', 'weak')",
                 "assert(#queued == 0, 'missing weakness data queued a spell')",
                 "dataFiles['fixture/weakness_data.lua'] = indexData(dominant)",
-                "dataFiles['fixture/weakness_data/100.lua'] = zoneData({123456, 'Proof Rabbit', 7})",
                 "invoke('/oc', 'weak')",
                 "assert(#queued == 1 and queued[1].command == '/ma \"Fire V\" <t>', 'a failed data load was cached instead of retried')",
-                "print('PASS OddCast exact weakness lookup and dominance contract')",
+                "print('PASS OddCast global mob weakness and dominance contract')",
             )
         ),
         encoding="utf-8",
@@ -444,16 +433,15 @@ def test_oddcast_weakness_exact_lookup_and_dominance_contract(tmp_path: Path) ->
         timeout=10,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert "PASS OddCast exact weakness lookup and dominance contract" in completed.stdout
+    assert "PASS OddCast global mob weakness and dominance contract" in completed.stdout
 
 
-def test_oddcast_real_generated_snipper_profile_queues_independent_winner(
+def test_oddcast_generated_damselfly_and_goblin_profiles_ignore_zone_identity(
     tmp_path: Path,
 ) -> None:
     luajit = shutil.which("luajit")
     assert luajit is not None
     assert (ODDCAST_DIR / "weakness_data.lua").is_file()
-    assert (ODDCAST_DIR / "weakness_data" / "1.lua").is_file()
 
     driver = tmp_path / "oddcast_real_data_contract.lua"
     driver.write_text(
@@ -470,11 +458,13 @@ def test_oddcast_real_generated_snipper_profile_queues_independent_winner(
                 "addon = { path=[[" + ODDCAST_DIR.as_posix() + "/]] }",
                 "ashita = { events={register=function(name, _, cb) callbacks[name]=cb end}, memory={find=function() return 0 end, read_uint32=function() return 0 end} }",
                 "local resources = {}",
+                "-- Deliberately synthetic identities prove weakness is keyed by the global mob name, not a zone spawn row.",
+                "local liveName, liveServerId, liveZone = 'Damselfly', 17227777, 119",
                 "for _, row in ipairs({{148,'Fire V'},{153,'Blizzard V'},{158,'Aero V'},{163,'Stone V'},{168,'Thunder V'},{173,'Water V'}}) do resources[row[1]]={Name={row[2]},ManaCost=1,LevelRequired={[5]=1}} end",
                 "local target={GetIsSubTargetActive=function() return 0 end,GetTargetIndex=function() return 1 end}",
-                "local entity={GetSpawnFlags=function() return 0x10 end,GetName=function() return 'Snipper' end,GetServerId=function() return 16781313 end}",
+                "local entity={GetSpawnFlags=function() return 0x10 end,GetName=function() return liveName end,GetServerId=function() return liveServerId end}",
                 "local player={GetMainJob=function() return 4 end,GetMainJobLevel=function() return 99 end,GetSubJob=function() return 1 end,GetSubJobLevel=function() return 49 end,HasSpell=function(_, id) return resources[id] ~= nil end}",
-                "local party={GetMemberMP=function() return 9999 end,GetMemberZone=function() return 1 end}",
+                "local party={GetMemberMP=function() return 9999 end,GetMemberZone=function() return liveZone end}",
                 "local recast={GetSpellTimer=function() return 0 end}",
                 "local memory={GetTarget=function() return target end,GetEntity=function() return entity end,GetPlayer=function() return player end,GetParty=function() return party end,GetRecast=function() return recast end}",
                 "local resourceManager={GetSpellById=function(_, id) return resources[id] end}",
@@ -484,9 +474,12 @@ def test_oddcast_real_generated_snipper_profile_queues_independent_winner(
                 "local event={command={args=function() return {'/oc','weak'} end},blocked=false}",
                 "callbacks.command(event)",
                 "assert(event.blocked == true, 'real-data command was not consumed')",
-                "assert(#queued == 1, 'real generated target did not produce exactly one queue')",
-                "assert(queued[1].mode == 1 and queued[1].command == '/ma \"Thunder V\" <t>', 'real generated profile disagreed with independent dominance oracle')",
-                "print('PASS OddCast real generated Snipper weakness profile')",
+                "assert(#queued == 1, 'Meriphataud Damselfly did not produce exactly one queue')",
+                "assert(queued[1].mode == 1 and queued[1].command == '/ma \"Blizzard V\" <t>', 'Damselfly did not use the global Fly weakness profile')",
+                "liveName, liveServerId, liveZone = 'Goblin Ambusher', 999999, 1",
+                "callbacks.command({command={args=function() return {'/oc','weak'} end},blocked=false})",
+                "assert(#queued == 2 and queued[2].command == '/ma \"Thunder V\" <t>', 'Goblin did not use the global Goblin weakness profile')",
+                "print('PASS OddCast Damselfly and Goblin global family weaknesses')",
             )
         ),
         encoding="utf-8",
@@ -500,7 +493,7 @@ def test_oddcast_real_generated_snipper_profile_queues_independent_winner(
         timeout=10,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert "PASS OddCast real generated Snipper weakness profile" in completed.stdout
+    assert "PASS OddCast Damselfly and Goblin global family weaknesses" in completed.stdout
 
 
 def test_oddcast_text_target_settings_bind_selection_and_queued_token(
@@ -528,13 +521,11 @@ def test_oddcast_text_target_settings_bind_selection_and_queued_token(
                 "local zone = 100",
                 "local rawTime = (80002 * 3456) - 92514960",
                 "local sourceSha = 'sha256:' .. string.rep('a', 64)",
-                "local fileSha = 'sha256:' .. string.rep('b', 64)",
                 "local elements = {'Fire','Ice','Wind','Earth','Lightning','Water'}",
                 "local fireDominant = {10000,-5000,-5000,-5000,-5000,-5000,0,1,1,1,1,1}",
                 "local iceDominant = {-5000,10000,-5000,-5000,-5000,-5000,1,0,1,1,1,1}",
                 "local dataFiles = {",
-                "  ['fixture/weakness_data.lua']={schema=1,sourceSha256=sourceSha,elements=elements,profiles={[7]=fireDominant,[8]=iceDominant},zoneFiles={[100]={path='weakness_data/100.lua',sha256=fileSha,count=2}}},",
-                "  ['fixture/weakness_data/100.lua']={schema=1,zone=100,sourceSha256=sourceSha,records={[321]={111111,'Main Rabbit',7},[322]={222222,'Battle Rabbit',8}}},",
+                "  ['fixture/weakness_data.lua']={schema=2,sourceSha256=sourceSha,elements=elements,profiles={[7]=fireDominant,[8]=iceDominant},names={['main rabbit']=7,['battle rabbit']=8},familyPrefixes={['rabbit']=7}},",
                 "}",
                 "local resources = {}",
                 "for _, row in ipairs({{148,'Fire V'},{153,'Blizzard V'},{158,'Aero V'},{163,'Stone V'},{168,'Thunder V'},{173,'Water V'}}) do",

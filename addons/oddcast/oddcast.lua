@@ -1,7 +1,7 @@
 addon.name = 'oddcast';
 addon.author = 'OddLua';
-addon.version = '0.2.1';
-addon.desc = 'Selects a ready nuke for the current Vana day or a validated static target baseline.';
+addon.version = '0.2.2';
+addon.desc = 'Selects a ready nuke for the current Vana day or a typical mob-family weakness.';
 
 require('common');
 local bit = require('bit');
@@ -36,10 +36,9 @@ local BATTLE_TARGET_SIGNATURE = '66A1????????83EC186685C053565774??0FBFC08B0C85'
 local VANA_TIME_EPOCH_OFFSET = 92514960;
 local VANA_DAY_SECONDS = 3456;
 
-local WEAKNESS_SCHEMA = 1;
+local WEAKNESS_SCHEMA = 2;
 local WEAKNESS_INDEX_FILE = 'weakness_data.lua';
 local weaknessIndex = nil;
-local weaknessZone = nil;
 
 local dayElements = {
     { day = 'Firesday', element = 'Fire' },
@@ -140,6 +139,14 @@ local function isSha256(value)
         and string.match(value, '^sha256:%x+$') ~= nil;
 end
 
+local function normalizeMobName(value)
+    return string.lower(tostring(value or ''))
+        :gsub('_', ' ')
+        :gsub('%s+', ' ')
+        :gsub('^%s+', '')
+        :gsub('%s+$', '');
+end
+
 local function addonFile(relativePath)
     local base = tostring(addon.path or '');
     if base == '' then
@@ -188,7 +195,8 @@ local function loadWeaknessIndex()
         or not isSha256(data.sourceSha256)
         or type(data.elements) ~= 'table'
         or type(data.profiles) ~= 'table'
-        or type(data.zoneFiles) ~= 'table'
+        or type(data.names) ~= 'table'
+        or type(data.familyPrefixes) ~= 'table'
     then
         return nil, 'Weakness index is malformed; no spell was queued.';
     end
@@ -212,66 +220,23 @@ local function loadWeaknessIndex()
             return nil, 'Weakness index contains a malformed resistance profile; no spell was queued.';
         end
     end
+    for name, profileId in pairs(data.names) do
+        if type(name) ~= 'string' or name == '' or normalizeMobName(name) ~= name
+            or not isNonNegativeInteger(profileId) or data.profiles[profileId] == nil
+        then
+            return nil, 'Weakness index contains a malformed mob-name mapping; no spell was queued.';
+        end
+    end
+    for prefix, profileId in pairs(data.familyPrefixes) do
+        if type(prefix) ~= 'string' or prefix == '' or normalizeMobName(prefix) ~= prefix
+            or not isNonNegativeInteger(profileId) or data.profiles[profileId] == nil
+        then
+            return nil, 'Weakness index contains a malformed family mapping; no spell was queued.';
+        end
+    end
 
     weaknessIndex = data;
     return weaknessIndex, nil;
-end
-
-local function loadWeaknessZone(zone)
-    local index, indexError = loadWeaknessIndex();
-    if index == nil then
-        return nil, indexError;
-    end
-    if weaknessZone ~= nil and weaknessZone.zone == zone then
-        return weaknessZone, nil;
-    end
-    -- Retain at most the currently requested zone's records.
-    weaknessZone = nil;
-
-    local entry = index.zoneFiles[zone];
-    local expectedPath = string.format('weakness_data/%d.lua', zone);
-    if type(entry) ~= 'table'
-        or entry.path ~= expectedPath
-        or not isSha256(entry.sha256)
-        or not isInteger(entry.count)
-        or entry.count < 0
-    then
-        return nil, 'No validated weakness data exists for the current zone; no spell was queued.';
-    end
-
-    local path = addonFile(entry.path);
-    local ok, data = pcall(dofile, path);
-    if not ok or type(data) ~= 'table' then
-        return nil, 'Current-zone weakness data is missing or unreadable; no spell was queued.';
-    end
-    if data.schema ~= WEAKNESS_SCHEMA
-        or data.zone ~= zone
-        or data.sourceSha256 ~= index.sourceSha256
-        or type(data.records) ~= 'table'
-    then
-        return nil, 'Current-zone weakness data is malformed; no spell was queued.';
-    end
-
-    local count = 0;
-    for targetIndex, record in pairs(data.records) do
-        count = count + 1;
-        if not isPositiveInteger(targetIndex)
-            or type(record) ~= 'table'
-            or not isPositiveInteger(record[1])
-            or type(record[2]) ~= 'string'
-            or record[2] == ''
-            or not isNonNegativeInteger(record[3])
-            or index.profiles[record[3]] == nil
-        then
-            return nil, 'Current-zone weakness data contains a malformed target record; no spell was queued.';
-        end
-    end
-    if count ~= entry.count then
-        return nil, 'Current-zone weakness record count does not match its index; no spell was queued.';
-    end
-
-    weaknessZone = data;
-    return weaknessZone, nil;
 end
 
 local function configuredTargetToken()
@@ -554,24 +519,29 @@ local function chooseDay(target)
 end
 
 local function weaknessProfile(target)
-    local zoneData, zoneError = loadWeaknessZone(target.zone);
-    if zoneData == nil then
-        return nil, zoneError;
-    end
-
-    local record = zoneData.records[target.index];
-    if type(record) ~= 'table'
-        or record[1] ~= target.serverId
-        or record[2] ~= target.name
-    then
-        return nil, 'No exact weakness record matches this target; no spell was queued.';
-    end
-
     local index, indexError = loadWeaknessIndex();
     if index == nil then
         return nil, indexError;
     end
-    local profile = index.profiles[record[3]];
+    local normalizedName = normalizeMobName(target.name);
+    local profileId = index.names[normalizedName];
+    if profileId == nil then
+        local bestPrefixLength = 0;
+        for prefix, familyProfileId in pairs(index.familyPrefixes) do
+            local boundary = string.sub(normalizedName, #prefix + 1, #prefix + 1);
+            if string.sub(normalizedName, 1, #prefix) == prefix
+                and (boundary == '' or boundary == ' ' or boundary == '-' or boundary == "'")
+                and #prefix > bestPrefixLength
+            then
+                profileId = familyProfileId;
+                bestPrefixLength = #prefix;
+            end
+        end
+    end
+    if profileId == nil then
+        return nil, 'No typical mob-family weakness matches this target; no spell was queued.';
+    end
+    local profile = index.profiles[profileId];
     if not validProfile(profile) then
         return nil, 'The target weakness profile is malformed; no spell was queued.';
     end
@@ -621,42 +591,33 @@ local function chooseWeakness(target)
         return;
     end
 
-    local winners = {};
+    local winner = nil;
     for _, candidate in ipairs(candidates) do
-        local dominatesAll = true;
-        for _, other in ipairs(candidates) do
-            if candidate ~= other then
-                local noWorse = candidate.baseline >= other.baseline
-                    and candidate.rank <= other.rank;
-                local strictlyBetter = candidate.baseline > other.baseline
-                    or candidate.rank < other.rank;
-                if not noWorse or not strictlyBetter then
-                    dominatesAll = false;
-                    break;
-                end
-            end
+        if winner == nil
+            or candidate.rank < winner.rank
+            or (candidate.rank == winner.rank and candidate.baseline > winner.baseline)
+            or (candidate.rank == winner.rank and candidate.baseline == winner.baseline
+                and candidate.spell.power > winner.spell.power)
+            or (candidate.rank == winner.rank and candidate.baseline == winner.baseline
+                and candidate.spell.power == winner.spell.power
+                and candidate.spell.id < winner.spell.id)
+        then
+            winner = candidate;
         end
-        if dominatesAll then
-            winners[#winners + 1] = candidate;
-        end
-    end
-    if #winners ~= 1 then
-        message('Static baseline comparison is tied or has a potency/rank tradeoff; no spell was queued.', true);
-        return;
     end
 
-    local best = winners[1].spell;
+    local best = winner.spell;
     local queued, queueError = cast(best, target);
     if not queued then
         message(queueError, true);
         return;
     end
-    message(string.format('%s: static baseline recommendation queued %s.', target.name, best.name), false);
+    message(string.format('%s: typical family baseline queued %s.', target.name, best.name), false);
 end
 
 local function showHelp()
     message('/oddcast day | /oc day - highest modeled ready spell matching the current Vana day.', false);
-    message('/oddcast weakness | /oc weak - dominance-safe static baseline for an exact indexed target.', false);
+    message('/oddcast weakness | /oc weak - typical mob-family weakness, independent of zone.', false);
     message('/oddcast settings | /oc settings - show current text settings.', false);
     message('/oddcast target [<t>|<bt>] | /oc target [<t>|<bt>] - show or set the hostile target token.', false);
 end
