@@ -28,6 +28,12 @@ def _weakness_catalog_rows() -> list[tuple[str, str, str, str, str]]:
     )
 
 
+def test_oddcast_metadata_credits_oddone() -> None:
+    addon_text = ODDCAST_PATH.read_text(encoding="utf-8")
+    assert "addon.author = 'Oddone';" in addon_text
+    assert "addon.author = 'OddLua';" not in addon_text
+
+
 def test_oddcast_day_table_is_complete_and_in_vana_week_order() -> None:
     addon_text = ODDCAST_PATH.read_text(encoding="utf-8")
     rows = re.findall(

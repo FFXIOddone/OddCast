@@ -1,5 +1,5 @@
 addon.name = 'oddcast';
-addon.author = 'OddLua';
+addon.author = 'Oddone';
 addon.version = '0.2.2';
 addon.desc = 'Selects a ready nuke for the current Vana day or a typical mob-family weakness.';
 
