@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import re
 import shutil
 import subprocess
@@ -8,10 +9,14 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 ODDCAST_PATH = ROOT / "addons" / "oddcast" / "oddcast.lua"
-CATSEYE_DAMAGE_SPELL_PATH = (
-    ROOT.parent / "server" / "scripts" / "globals" / "spells" / "damage_spell.lua"
+ODDCAST_DIR = ODDCAST_PATH.parent
+CATSEYE_SERVER_ROOT = Path(
+    os.environ.get("CATSEYE_SERVER_ROOT", ROOT.parent / "server")
 )
-CATSEYE_MAGIC_ENUM_PATH = ROOT.parent / "server" / "scripts" / "enum" / "magic.lua"
+CATSEYE_DAMAGE_SPELL_PATH = (
+    CATSEYE_SERVER_ROOT / "scripts" / "globals" / "spells" / "damage_spell.lua"
+)
+CATSEYE_MAGIC_ENUM_PATH = CATSEYE_SERVER_ROOT / "scripts" / "enum" / "magic.lua"
 
 
 def _weakness_catalog_rows() -> list[tuple[str, str, str, str, str]]:
@@ -94,7 +99,7 @@ def test_oddcast_weakness_catalog_matches_catseye_pc_base_power_table() -> None:
         assert float(power) == float(server_row.group(1)), name
 
 
-def test_oddcast_day_and_disabled_weakness_commands_are_fail_closed(tmp_path: Path) -> None:
+def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path: Path) -> None:
     luajit = shutil.which("luajit")
     assert luajit is not None
     assert ODDCAST_PATH.is_file()
@@ -108,7 +113,9 @@ def test_oddcast_day_and_disabled_weakness_commands_are_fail_closed(tmp_path: Pa
                 "local queued = {}",
                 "local output = {}",
                 "local targetIndex = 321",
+                "local targetServerId = 123456",
                 "local targetName = 'Proof Rabbit'",
+                "local targetZone = 100",
                 "local mainJob, mainLevel, subJob, subLevel = 4, 75, 1, 37",
                 "local known = { [146]=1, [167]=true, [171]=true, [172]=true }",
                 "local timers = {}",
@@ -131,7 +138,7 @@ def test_oddcast_day_and_disabled_weakness_commands_are_fail_closed(tmp_path: Pa
                 "package.preload['chat'] = function()",
                 "    return { header=function(v) return '['..v..'] ' end, message=function(v) return v end, error=function(v) return v end }",
                 "end",
-                "addon = {}",
+                "addon = { path='fixture/' }",
                 "ashita = {",
                 "    events = { register=function(name, _, cb) callbacks[name]=cb end },",
                 "    memory = {",
@@ -144,13 +151,13 @@ def test_oddcast_day_and_disabled_weakness_commands_are_fail_closed(tmp_path: Pa
                 "    },",
                 "}",
                 "local target = { GetIsSubTargetActive=function() return 0 end, GetTargetIndex=function() return targetIndex end }",
-                "local entity = { GetSpawnFlags=function() return 0x10 end, GetName=function() return targetName end }",
+                "local entity = { GetSpawnFlags=function() return 0x10 end, GetName=function() return targetName end, GetServerId=function() return targetServerId end }",
                 "local player = {",
                 "    GetMainJob=function() return mainJob end, GetMainJobLevel=function() return mainLevel end,",
                 "    GetSubJob=function() return subJob end, GetSubJobLevel=function() return subLevel end,",
                 "    HasSpell=function(_, id) return known[id] end,",
                 "}",
-                "local party = { GetMemberMP=function() return currentMP end }",
+                "local party = { GetMemberMP=function() return currentMP end, GetMemberZone=function() return targetZone end }",
                 "local recast = { GetSpellTimer=function(_, id)",
                 "    if mutateTargetOnTimer then targetIndex=400; targetName='Changed Rabbit'; mutateTargetOnTimer=false end",
                 "    return timers[id] or 0",
@@ -205,13 +212,13 @@ def test_oddcast_day_and_disabled_weakness_commands_are_fail_closed(tmp_path: Pa
                 "targetIndex = 321",
                 "targetName = 'Proof Rabbit'",
                 "invoke('/oddcast', 'weak')",
-                "assert(#queued == 5, 'disabled weakness command queued a spell')",
-                "local sawDisabled = false",
-                "for _, line in ipairs(output) do if string.find(line, 'Weakness selection is disabled', 1, true) then sawDisabled=true end end",
-                "assert(sawDisabled, 'disabled weakness command did not explain why')",
+                "assert(#queued == 5, 'missing weakness data queued a spell')",
+                "local sawMissing = false",
+                "for _, line in ipairs(output) do if string.find(line, 'Weakness index is missing or unreadable', 1, true) then sawMissing=true end end",
+                "assert(sawMissing, 'missing weakness data did not explain why')",
                 "targetIndex = 0",
                 "invoke('/oc', 'weakness')",
-                "assert(#queued == 5, 'disabled weakness command consulted or queued against a target')",
+                "assert(#queued == 5, 'targetless weakness command queued a spell')",
                 "targetIndex = 321",
                 "chatAvailable = false",
                 "invoke('/oc', 'day')",
@@ -229,7 +236,7 @@ def test_oddcast_day_and_disabled_weakness_commands_are_fail_closed(tmp_path: Pa
                 "local unrelated={ command={ args=function() return {'/notoddcast', 'day'} end }, blocked=false }",
                 "callbacks.command(unrelated)",
                 "assert(unrelated.blocked == false, 'unrelated command was blocked')",
-                "print('PASS OddCast day and disabled weakness fail-closed command contract')",
+                "print('PASS OddCast day and missing weakness data fail-closed command contract')",
             )
         ),
         encoding="utf-8",
@@ -245,9 +252,237 @@ def test_oddcast_day_and_disabled_weakness_commands_are_fail_closed(tmp_path: Pa
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert (
-        "PASS OddCast day and disabled weakness fail-closed command contract"
+        "PASS OddCast day and missing weakness data fail-closed command contract"
         in completed.stdout
     )
+
+
+def test_oddcast_weakness_exact_lookup_and_dominance_contract(tmp_path: Path) -> None:
+    luajit = shutil.which("luajit")
+    assert luajit is not None
+    assert ODDCAST_PATH.is_file()
+
+    driver = tmp_path / "oddcast_weakness_contract.lua"
+    driver.write_text(
+        "\n".join(
+            (
+                "local ODDCAST_PATH = [[" + ODDCAST_PATH.as_posix() + "]]",
+                "local realDofile = dofile",
+                "local callbacks, queued, output, dataFiles, loadCounts = {}, {}, {}, {}, {}",
+                "local targetIndex, targetServerId, targetName, targetZone = 321, 123456, 'Proof Rabbit', 100",
+                "local known, timers, mutateTarget = {}, {}, false",
+                "local sourceSha = 'sha256:' .. string.rep('a', 64)",
+                "local fileSha = 'sha256:' .. string.rep('b', 64)",
+                "local elements = { 'Fire', 'Ice', 'Wind', 'Earth', 'Lightning', 'Water' }",
+                "local resources = {}",
+                "local function spell(id, name)",
+                "    resources[id] = { Name={name}, ManaCost=1, LevelRequired={ [5]=1 } }",
+                "end",
+                "spell(147, 'Fire IV')",
+                "spell(148, 'Fire V')",
+                "spell(153, 'Blizzard V')",
+                "spell(158, 'Aero V')",
+                "spell(163, 'Stone V')",
+                "spell(168, 'Thunder V')",
+                "spell(173, 'Water V')",
+                "package.preload['common'] = function() return true end",
+                "package.preload['chat'] = function()",
+                "    return { header=function(v) return '['..v..'] ' end, message=function(v) return v end, error=function(v) return v end }",
+                "end",
+                "local originalPrint = print",
+                "print = function(value) output[#output + 1] = tostring(value); originalPrint(value) end",
+                "dofile = function(path)",
+                "    if string.sub(path, 1, 8) == 'fixture/' then",
+                "        loadCounts[path] = (loadCounts[path] or 0) + 1",
+                "        local value = dataFiles[path]",
+                "        if value == nil then error('missing fixture: ' .. path) end",
+                "        return value",
+                "    end",
+                "    return realDofile(path)",
+                "end",
+                "ashita = {",
+                "    events = { register=function(name, _, cb) callbacks[name]=cb end },",
+                "    memory = { find=function() return 0 end, read_uint32=function() return 0 end },",
+                "}",
+                "local target = { GetTargetIndex=function() return targetIndex end }",
+                "local entity = {",
+                "    GetSpawnFlags=function() return 0x10 end,",
+                "    GetName=function() return targetName end,",
+                "    GetServerId=function() return targetServerId end,",
+                "}",
+                "local player = {",
+                "    GetMainJob=function() return 4 end, GetMainJobLevel=function() return 99 end,",
+                "    GetSubJob=function() return 1 end, GetSubJobLevel=function() return 49 end,",
+                "    HasSpell=function(_, id) return known[id] end,",
+                "}",
+                "local party = { GetMemberMP=function() return 9999 end, GetMemberZone=function() return targetZone end }",
+                "local recast = { GetSpellTimer=function(_, id)",
+                "    if mutateTarget then",
+                "        targetServerId, targetZone, mutateTarget = 654321, 101, false",
+                "    end",
+                "    return timers[id] or 0",
+                "end }",
+                "local memory = {",
+                "    GetTarget=function() return target end, GetEntity=function() return entity end,",
+                "    GetPlayer=function() return player end, GetParty=function() return party end,",
+                "    GetRecast=function() return recast end,",
+                "}",
+                "local resourceManager = { GetSpellById=function(_, id) return resources[id] end }",
+                "local chatManager = { QueueCommand=function(_, mode, command) queued[#queued + 1]={mode=mode, command=command} end }",
+                "AshitaCore = {",
+                "    GetMemoryManager=function() return memory end,",
+                "    GetResourceManager=function() return resourceManager end,",
+                "    GetChatManager=function() return chatManager end,",
+                "}",
+                "local function indexData(profile)",
+                "    return {",
+                "        schema=1, sourceSha256=sourceSha, elements=elements, profiles={ [7]=profile },",
+                "        zoneFiles={ [100]={ path='weakness_data/100.lua', sha256=fileSha, count=1 } },",
+                "    }",
+                "end",
+                "local function zoneData(record, declaredZone)",
+                "    return { schema=1, zone=declaredZone or 100, sourceSha256=sourceSha, records={ [321]=record } }",
+                "end",
+                "local function reset(indexValue, zoneValue)",
+                "    callbacks, queued, output, dataFiles, loadCounts = {}, {}, {}, {}, {}",
+                "    targetIndex, targetServerId, targetName, targetZone = 321, 123456, 'Proof Rabbit', 100",
+                "    known = { [147]=true, [148]=true, [153]=true, [158]=true, [163]=true, [168]=true, [173]=true }",
+                "    timers, mutateTarget = {}, false",
+                "    if indexValue ~= nil then dataFiles['fixture/weakness_data.lua'] = indexValue end",
+                "    if zoneValue ~= nil then dataFiles['fixture/weakness_data/100.lua'] = zoneValue end",
+                "    addon = { path='fixture/' }",
+                "    realDofile(ODDCAST_PATH)",
+                "end",
+                "local function invoke(prefix, action)",
+                "    local event={ command={ args=function() return {prefix, action} end }, blocked=false }",
+                "    callbacks.command(event)",
+                "    assert(event.blocked == true, 'OddCast command was not blocked')",
+                "end",
+                "local dominant = { 10000, -5000, -5000, -5000, -5000, -5000, 0, 1, 1, 1, 1, 1 }",
+                "reset(indexData(dominant), zoneData({123456, 'Proof Rabbit', 7}))",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 1 and queued[1].command == '/ma \"Fire V\" <t>', 'exact dominant lookup did not choose Fire V')",
+                "invoke('/oddcast', 'weakness')",
+                "assert(#queued == 2 and queued[2].command == '/ma \"Fire V\" <t>', 'weakness alias did not choose Fire V')",
+                "assert(loadCounts['fixture/weakness_data.lua'] == 1, 'weakness index was not cached')",
+                "assert(loadCounts['fixture/weakness_data/100.lua'] == 1, 'current zone data was not cached')",
+                "timers[148] = 1",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 3 and queued[3].command == '/ma \"Fire IV\" <t>', 'weakness did not use the highest ready tier per element')",
+                "local sawClaim = false",
+                "for _, line in ipairs(output) do if string.find(line, 'static baseline recommendation', 1, true) then sawClaim=true end end",
+                "assert(sawClaim, 'success output omitted the static baseline recommendation boundary')",
+                "reset(indexData(dominant), zoneData({999999, 'Proof Rabbit', 7}))",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'server-ID mismatch queued a spell')",
+                "reset(indexData(dominant), zoneData({123456, 'Wrong Rabbit', 7}))",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'name mismatch queued a spell')",
+                "reset(indexData(dominant), zoneData({123456, 'Proof Rabbit', 7}, 101))",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'zone mismatch queued a spell')",
+                "local malformed = indexData(dominant); malformed.schema = 2",
+                "reset(malformed, zoneData({123456, 'Proof Rabbit', 7}))",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'malformed index queued a spell')",
+                "local missingField = { 10000, -5000, -5000, -5000, -5000, -5000, 0, 1, 1, 1, 1 }",
+                "reset(indexData(missingField), zoneData({123456, 'Proof Rabbit', 7}))",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'profile with a missing field queued a spell')",
+                "local outOfRangeRank = { 0, 0, 0, 0, 0, 0, -4, -3, 0, 0, 0, 0 }",
+                "reset(indexData(outOfRangeRank), zoneData({123456, 'Proof Rabbit', 7}))",
+                "known = { [148]=true, [153]=true }",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'out-of-range resistance rank was compared instead of rejected')",
+                "local tied = { 625, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }",
+                "reset(indexData(tied), zoneData({123456, 'Proof Rabbit', 7}))",
+                "known = { [148]=true, [153]=true }",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'equal baseline/rank tie queued a spell')",
+                "local tradeoff = { 10000, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0 }",
+                "reset(indexData(tradeoff), zoneData({123456, 'Proof Rabbit', 7}))",
+                "known = { [148]=true, [153]=true }",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'potency/rank tradeoff queued a spell')",
+                "reset(indexData(dominant), zoneData({123456, 'Proof Rabbit', 7}))",
+                "mutateTarget = true",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'target identity mutation queued a spell')",
+                "reset(nil, nil)",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 0, 'missing weakness data queued a spell')",
+                "dataFiles['fixture/weakness_data.lua'] = indexData(dominant)",
+                "dataFiles['fixture/weakness_data/100.lua'] = zoneData({123456, 'Proof Rabbit', 7})",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 1 and queued[1].command == '/ma \"Fire V\" <t>', 'a failed data load was cached instead of retried')",
+                "print('PASS OddCast exact weakness lookup and dominance contract')",
+            )
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    completed = subprocess.run(
+        [luajit, str(driver)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "PASS OddCast exact weakness lookup and dominance contract" in completed.stdout
+
+
+def test_oddcast_real_generated_snipper_profile_queues_independent_winner(
+    tmp_path: Path,
+) -> None:
+    luajit = shutil.which("luajit")
+    assert luajit is not None
+    assert (ODDCAST_DIR / "weakness_data.lua").is_file()
+    assert (ODDCAST_DIR / "weakness_data" / "1.lua").is_file()
+
+    driver = tmp_path / "oddcast_real_data_contract.lua"
+    driver.write_text(
+        "\n".join(
+            (
+                "local ODDCAST_PATH = [[" + ODDCAST_PATH.as_posix() + "]]",
+                "local callbacks, queued = {}, {}",
+                "package.preload['common'] = function() return true end",
+                "package.preload['chat'] = function() return { header=function(v) return '['..v..'] ' end, message=function(v) return v end, error=function(v) return v end } end",
+                "addon = { path=[[" + ODDCAST_DIR.as_posix() + "/]] }",
+                "ashita = { events={register=function(name, _, cb) callbacks[name]=cb end}, memory={find=function() return 0 end, read_uint32=function() return 0 end} }",
+                "local resources = {}",
+                "for _, row in ipairs({{148,'Fire V'},{153,'Blizzard V'},{158,'Aero V'},{163,'Stone V'},{168,'Thunder V'},{173,'Water V'}}) do resources[row[1]]={Name={row[2]},ManaCost=1,LevelRequired={[5]=1}} end",
+                "local target={GetTargetIndex=function() return 1 end}",
+                "local entity={GetSpawnFlags=function() return 0x10 end,GetName=function() return 'Snipper' end,GetServerId=function() return 16781313 end}",
+                "local player={GetMainJob=function() return 4 end,GetMainJobLevel=function() return 99 end,GetSubJob=function() return 1 end,GetSubJobLevel=function() return 49 end,HasSpell=function(_, id) return resources[id] ~= nil end}",
+                "local party={GetMemberMP=function() return 9999 end,GetMemberZone=function() return 1 end}",
+                "local recast={GetSpellTimer=function() return 0 end}",
+                "local memory={GetTarget=function() return target end,GetEntity=function() return entity end,GetPlayer=function() return player end,GetParty=function() return party end,GetRecast=function() return recast end}",
+                "local resourceManager={GetSpellById=function(_, id) return resources[id] end}",
+                "local chatManager={QueueCommand=function(_, mode, command) queued[#queued+1]={mode=mode,command=command} end}",
+                "AshitaCore={GetMemoryManager=function() return memory end,GetResourceManager=function() return resourceManager end,GetChatManager=function() return chatManager end}",
+                "dofile(ODDCAST_PATH)",
+                "local event={command={args=function() return {'/oc','weak'} end},blocked=false}",
+                "callbacks.command(event)",
+                "assert(event.blocked == true, 'real-data command was not consumed')",
+                "assert(#queued == 1, 'real generated target did not produce exactly one queue')",
+                "assert(queued[1].mode == 1 and queued[1].command == '/ma \"Thunder V\" <t>', 'real generated profile disagreed with independent dominance oracle')",
+                "print('PASS OddCast real generated Snipper weakness profile')",
+            )
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    completed = subprocess.run(
+        [luajit, str(driver)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "PASS OddCast real generated Snipper weakness profile" in completed.stdout
 
 
 def test_oddcast_compiles_under_luajit(tmp_path: Path) -> None:

@@ -1,0 +1,724 @@
+{
+  "dataLicense": "GPL-3.0-or-later",
+  "excluded": {
+    "direct-script": 14618,
+    "magic-pool-modifier": 17,
+    "magic-species-modifier": 2537,
+    "missing-join": 342,
+    "zero-position": 19789,
+    "zone-mixin": 25673
+  },
+  "files": [
+    {
+      "count": null,
+      "path": "weakness_data.lua",
+      "sha256": "sha256:27f5caa1c343ab788e860e7f6d095f0b6009ba97de75ca176e40963e68c5ed9a"
+    },
+    {
+      "count": 14,
+      "path": "weakness_data/1.lua",
+      "sha256": "sha256:5e15406e332b16aab4655fdd96553b7740d52d997420b00a4f51cec89db6f79b"
+    },
+    {
+      "count": 125,
+      "path": "weakness_data/11.lua",
+      "sha256": "sha256:a351510e670c9ecd203d5f6d584cad301cd94c932d133ce7fd924dc461b40b61"
+    },
+    {
+      "count": 141,
+      "path": "weakness_data/12.lua",
+      "sha256": "sha256:fa2b8e610d9b79f49ad42cf5f5e5e6321b6f8a7495803cfcd2c4e94229bec410"
+    },
+    {
+      "count": 38,
+      "path": "weakness_data/129.lua",
+      "sha256": "sha256:09a823677f30e0ec7a87e2820127884a656226ec2e9d8561d6d8c5650de74d32"
+    },
+    {
+      "count": 3,
+      "path": "weakness_data/13.lua",
+      "sha256": "sha256:86a549a9e881289fe432f3fee1a2c6ad8bc94071eb2a25bb674283d99637713e"
+    },
+    {
+      "count": 85,
+      "path": "weakness_data/134.lua",
+      "sha256": "sha256:977218cd2bcd0de4ecf53c05c6af7d7754747014f67e59f7131fbe81cb5fac7f"
+    },
+    {
+      "count": 170,
+      "path": "weakness_data/135.lua",
+      "sha256": "sha256:fc3b984f6875558b6128a2f4c783d80e93c4fbecf50bfbcc5a1371f26f4f3e24"
+    },
+    {
+      "count": 278,
+      "path": "weakness_data/136.lua",
+      "sha256": "sha256:376c4c11920c11d0e01658a0bb5a2a07f2b3f3edba10437d8b22316685c5f936"
+    },
+    {
+      "count": 207,
+      "path": "weakness_data/137.lua",
+      "sha256": "sha256:365b4181b3596af4a2e76b5f5bd0fa67c395d31f8e46dffa05ad0ce102c122ea"
+    },
+    {
+      "count": 200,
+      "path": "weakness_data/138.lua",
+      "sha256": "sha256:afbf59f7d5ba93469f7173543c776a782a32c70070156354eac6c8817a88cbc7"
+    },
+    {
+      "count": 93,
+      "path": "weakness_data/139.lua",
+      "sha256": "sha256:7457464c9fbf4b4dce1c7025614deb329602b80b2ac5ee65d9dd66704d79a621"
+    },
+    {
+      "count": 203,
+      "path": "weakness_data/140.lua",
+      "sha256": "sha256:4cef750f89ccbba40f81cf1623d0af7d1e146fe76bd1ded0d5263ed10fac7fe8"
+    },
+    {
+      "count": 205,
+      "path": "weakness_data/141.lua",
+      "sha256": "sha256:3ab0fb0875c00d5111eb35f8eae1d765074f773fff459ab0e8489bc5cc901176"
+    },
+    {
+      "count": 124,
+      "path": "weakness_data/142.lua",
+      "sha256": "sha256:0629085e3266215d1c9c0e78023434fb968642e194e1e30c3d71acc87b5ad7fc"
+    },
+    {
+      "count": 287,
+      "path": "weakness_data/143.lua",
+      "sha256": "sha256:6acf0f7ac6c64438b6dc4ffad3ffed5422c27844c1568d02649e257c4c7758d2"
+    },
+    {
+      "count": 72,
+      "path": "weakness_data/144.lua",
+      "sha256": "sha256:178e0a471956470a916813ab255484c84af0ef9b887c71d5643a0317f9d3d522"
+    },
+    {
+      "count": 291,
+      "path": "weakness_data/145.lua",
+      "sha256": "sha256:0db02ac51c3d5266eb89ef1d3a48a7f6152673d46455396176020d83e8fc0052"
+    },
+    {
+      "count": 99,
+      "path": "weakness_data/146.lua",
+      "sha256": "sha256:e710bfee56a8c30b0806b32bd8a5fa2312f1e525fb425032d018d6c183237d21"
+    },
+    {
+      "count": 230,
+      "path": "weakness_data/147.lua",
+      "sha256": "sha256:9a417e6abe5bdff02c3ac0274b1db16da94955a02ce28216df73b0580718139b"
+    },
+    {
+      "count": 15,
+      "path": "weakness_data/148.lua",
+      "sha256": "sha256:fd813e147c168fd7a776299d2dad1beeda692e7a730b61a79c50913ab14dda54"
+    },
+    {
+      "count": 319,
+      "path": "weakness_data/149.lua",
+      "sha256": "sha256:bbf31339f89494eb235d2d8a10f891f85bf42342eaa4bdfc26a2b404f2569cf0"
+    },
+    {
+      "count": 181,
+      "path": "weakness_data/150.lua",
+      "sha256": "sha256:4e2edd7fa7c5147f6bbec17f99d43a0940e1551e3621be1122ec81ac2f34bedf"
+    },
+    {
+      "count": 213,
+      "path": "weakness_data/151.lua",
+      "sha256": "sha256:8621a2435af73397ddcafe82fce1bca2131064f6ab1dee56801294ff8544912d"
+    },
+    {
+      "count": 1,
+      "path": "weakness_data/152.lua",
+      "sha256": "sha256:ff3e86163a43803fe86adfa8595815524cb06fca5f4f9a4095be9f6e0a414e75"
+    },
+    {
+      "count": 18,
+      "path": "weakness_data/154.lua",
+      "sha256": "sha256:2fdc03321a3362c8af21a3c9515c4a388e18af313706101dd0df332ae86556a4"
+    },
+    {
+      "count": 180,
+      "path": "weakness_data/155.lua",
+      "sha256": "sha256:147c0eeb2e7e69bf92b7f9fc71328cf1aaebbca79df32e74d3015457ca4f0881"
+    },
+    {
+      "count": 6,
+      "path": "weakness_data/156.lua",
+      "sha256": "sha256:3ccfbcd080471b6547e1e2a2d9dc84d0248fe32e7d7e7c27b54017830844e0fd"
+    },
+    {
+      "count": 111,
+      "path": "weakness_data/161.lua",
+      "sha256": "sha256:501efbcec514550b3aaf99035fae2aed49a1dc3ba27982f74fa93e3437bc7ca5"
+    },
+    {
+      "count": 139,
+      "path": "weakness_data/162.lua",
+      "sha256": "sha256:60561386e89b26cb073e6175d6712afb71c94be88449375d61f437623d18408a"
+    },
+    {
+      "count": 3,
+      "path": "weakness_data/163.lua",
+      "sha256": "sha256:982c67500e06c3a3eab2c54d0fe9e4076e86858637b75a216bd867eda2b942f5"
+    },
+    {
+      "count": 144,
+      "path": "weakness_data/164.lua",
+      "sha256": "sha256:406c0b510a965b9aca3428a34e65024a4cea4562e1aa7f56918d1e38744bb3eb"
+    },
+    {
+      "count": 9,
+      "path": "weakness_data/165.lua",
+      "sha256": "sha256:6332a728b842380af3a9f7515453b24af990dd5ddae32ba7514f96a1868c59cf"
+    },
+    {
+      "count": 9,
+      "path": "weakness_data/168.lua",
+      "sha256": "sha256:8769e70b98e036113cd9b67b27c0b71fc20e05e8d7de2d15dc06377b14aa0311"
+    },
+    {
+      "count": 9,
+      "path": "weakness_data/17.lua",
+      "sha256": "sha256:4f43fa7edfa7c676582cc66190a41ac939de1aeae931b81efd03ec3c81b2391d"
+    },
+    {
+      "count": 159,
+      "path": "weakness_data/171.lua",
+      "sha256": "sha256:74232cc915d9821135ade2cc63f31d3defd4fb16fe0de09f539b77b7232a6fe2"
+    },
+    {
+      "count": 104,
+      "path": "weakness_data/179.lua",
+      "sha256": "sha256:5f23d7e9e17d3d996a8d9ad7e9d155b90da2dd7036b6359138e75ced51f8f85f"
+    },
+    {
+      "count": 241,
+      "path": "weakness_data/182.lua",
+      "sha256": "sha256:6872b9df38b8ea79e61db477555135bba4480b83444e9dc3821e3b8bbe16c33a"
+    },
+    {
+      "count": 45,
+      "path": "weakness_data/183.lua",
+      "sha256": "sha256:17a22877962b112c7f1f1a5d525f2a03b0dc5658fa83e64d3c030899f41191bf"
+    },
+    {
+      "count": 29,
+      "path": "weakness_data/185.lua",
+      "sha256": "sha256:b7258aa411d0538ab01163642b2726083189872a15efb92005e4fc6c5b0735c4"
+    },
+    {
+      "count": 25,
+      "path": "weakness_data/186.lua",
+      "sha256": "sha256:92be5a50c64123e19353d3dee686fec327b26f4d61cfbdaa056b00812616a459"
+    },
+    {
+      "count": 34,
+      "path": "weakness_data/187.lua",
+      "sha256": "sha256:79831a8c8bb99082cbc4b7d2f243a00833dd91aad5893b4b89f88f10be373be7"
+    },
+    {
+      "count": 29,
+      "path": "weakness_data/188.lua",
+      "sha256": "sha256:22369f1c8cefac648f6bb9559392204de5081107d67b321fe6ef34896e14ed80"
+    },
+    {
+      "count": 268,
+      "path": "weakness_data/2.lua",
+      "sha256": "sha256:598648d051fb8d815b6ba280ee90a64392ba08de7f87c9b25f7b280b273552bb"
+    },
+    {
+      "count": 33,
+      "path": "weakness_data/206.lua",
+      "sha256": "sha256:bee6f9e35a33ec2d02429fc94e91c1d97beaf90f70dc3ecc938c4eb1fd650217"
+    },
+    {
+      "count": 15,
+      "path": "weakness_data/209.lua",
+      "sha256": "sha256:867da077e11a8cd10df26838c77a0d89e99fcb95a8ffa1e5e5f292b732dea682"
+    },
+    {
+      "count": 2,
+      "path": "weakness_data/22.lua",
+      "sha256": "sha256:81d4045b30efde4dc21bccbc10fedd1a22e4e0f3eeb92311ca62051fe93ff11d"
+    },
+    {
+      "count": 11,
+      "path": "weakness_data/220.lua",
+      "sha256": "sha256:f726b9f2a0b0f4efbd48263d76a9bc141ea3e30709ee37cf74e16bbda97f74f7"
+    },
+    {
+      "count": 11,
+      "path": "weakness_data/221.lua",
+      "sha256": "sha256:48a9685c6a768376ff1eb102e5412094fdb922746a11f5ae39fd99e1dd7a97b4"
+    },
+    {
+      "count": 18,
+      "path": "weakness_data/222.lua",
+      "sha256": "sha256:290f706f69c7e19ecf25c51458d4edc1e66a0451e384ee4d6b336d253feab5dd"
+    },
+    {
+      "count": 11,
+      "path": "weakness_data/227.lua",
+      "sha256": "sha256:b2669703a16b331bc5b9389ca1828bbcddbdd8626ca48dc8aa977b79f4f08012"
+    },
+    {
+      "count": 11,
+      "path": "weakness_data/228.lua",
+      "sha256": "sha256:1998f83f367fc0d7e32ba4789fbb9414131c2bbd6da9e96d9ed1a9c67824b199"
+    },
+    {
+      "count": 134,
+      "path": "weakness_data/24.lua",
+      "sha256": "sha256:1b3b21635aac326f42ab07978ba550adbf29ebd00ebb3527d842ccff1f2db9de"
+    },
+    {
+      "count": 195,
+      "path": "weakness_data/25.lua",
+      "sha256": "sha256:f2b59e82dc2226091683bf03be031d7416572e8c3887bcb0bc2391a71927ae4b"
+    },
+    {
+      "count": 3,
+      "path": "weakness_data/255.lua",
+      "sha256": "sha256:28dbb006481d179f944e1508f2054615968779e221509fd48c434a274672c632"
+    },
+    {
+      "count": 147,
+      "path": "weakness_data/258.lua",
+      "sha256": "sha256:e00e181c4bf86675145ce1fdd62c0a7eaa0159e8de895ff9305f2b2fe5ee0910"
+    },
+    {
+      "count": 7,
+      "path": "weakness_data/259.lua",
+      "sha256": "sha256:39d6ff6d0aa177bf694d0080f1da4813f185acf9a6d10ad23f79c52f1f63616f"
+    },
+    {
+      "count": 400,
+      "path": "weakness_data/260.lua",
+      "sha256": "sha256:3b9d2c48e5b50711645de4b3cea462eedc9c239e3325745ac7694eb15545538b"
+    },
+    {
+      "count": 371,
+      "path": "weakness_data/261.lua",
+      "sha256": "sha256:f19e3cf4216cf45fab36fe3facf70cd1302c8df53cb4fa82ba371c1b7d89fb52"
+    },
+    {
+      "count": 408,
+      "path": "weakness_data/262.lua",
+      "sha256": "sha256:72448a53553c255f6c737ead8cdf0378c1aa440e938f994de0bd89e36914ffba"
+    },
+    {
+      "count": 376,
+      "path": "weakness_data/263.lua",
+      "sha256": "sha256:232099bcead96be3faa8787330cf3c7b97d414510d196bdd7e6600022bf61b32"
+    },
+    {
+      "count": 599,
+      "path": "weakness_data/265.lua",
+      "sha256": "sha256:9043a78f5b6ec6abbef7927b938d287999f68ff862ee618eb488853b9c87c583"
+    },
+    {
+      "count": 263,
+      "path": "weakness_data/266.lua",
+      "sha256": "sha256:70101ec64fca7ccb5f53325d09365974ad03b315cb7f3b0a8d704606d7510470"
+    },
+    {
+      "count": 222,
+      "path": "weakness_data/267.lua",
+      "sha256": "sha256:c709a78f30c53fe149e1b779bf61eabced39a2b0eacca61c50a04208ec7a15d4"
+    },
+    {
+      "count": 278,
+      "path": "weakness_data/268.lua",
+      "sha256": "sha256:9429a8638b08b59cf1dbbb2b6e8a197b8ef7b3dffe8ab6a19f7b273fbf33805f"
+    },
+    {
+      "count": 271,
+      "path": "weakness_data/269.lua",
+      "sha256": "sha256:8ff148191bc7472250eb2bf2c6a87226780f8e28e5c1f8293b0b7c0365b4615c"
+    },
+    {
+      "count": 130,
+      "path": "weakness_data/27.lua",
+      "sha256": "sha256:b5e9b33e6d6b7c56436fa01dba8761d847abb12ae02016d131b6d55c744c9848"
+    },
+    {
+      "count": 594,
+      "path": "weakness_data/270.lua",
+      "sha256": "sha256:82093d2f4d1918012d448e5940b419057a6cf41a1349d104c47de15ddb80b2ee"
+    },
+    {
+      "count": 290,
+      "path": "weakness_data/272.lua",
+      "sha256": "sha256:b847d8242415d8a3e616c4ef6cf5cf292ec3d22a97e0773614f020594c5c992f"
+    },
+    {
+      "count": 357,
+      "path": "weakness_data/273.lua",
+      "sha256": "sha256:d4fc06568683890d8003ffc4e8c80b671a36bbed2fe95a1ef6107eb804b3ab0e"
+    },
+    {
+      "count": 327,
+      "path": "weakness_data/274.lua",
+      "sha256": "sha256:6f69ef8fd3f1d0eb45c9d5154fe121dee38f3f8bb073a1f3748851dfa41273cf"
+    },
+    {
+      "count": 443,
+      "path": "weakness_data/276.lua",
+      "sha256": "sha256:9941b4dca555ff7a0bc8e36220495f0134e7e581bce9efbd3bfe36d857eca054"
+    },
+    {
+      "count": 78,
+      "path": "weakness_data/28.lua",
+      "sha256": "sha256:1ca4973fa177e4b426bee96068a74fc2ec5234156f02f74273e18026dfea4c14"
+    },
+    {
+      "count": 454,
+      "path": "weakness_data/288.lua",
+      "sha256": "sha256:d864717615c646282a83ce50cda8a8d6998c2d36f7df2d3cbef982cce60fd2f0"
+    },
+    {
+      "count": 359,
+      "path": "weakness_data/289.lua",
+      "sha256": "sha256:20d36adcaddd0074d86623c065beab2d53508850f45277a41d01f80655d9b341"
+    },
+    {
+      "count": 102,
+      "path": "weakness_data/29.lua",
+      "sha256": "sha256:c8b677822fc93e8a0e0d7841f4c6183c03064d75253ded38747cf8ee7613993f"
+    },
+    {
+      "count": 1,
+      "path": "weakness_data/290.lua",
+      "sha256": "sha256:ebadf15aaac30339c799312debe2c373101ba8e4f8e6a997d5278493a995e843"
+    },
+    {
+      "count": 595,
+      "path": "weakness_data/291.lua",
+      "sha256": "sha256:39d718824754ac97acd93d7d42dd36d99458b562346f83021571a9cb9fad2c8c"
+    },
+    {
+      "count": 1,
+      "path": "weakness_data/293.lua",
+      "sha256": "sha256:e3cd5641877cafaf20b84566eb0e278a9b8f1f668567b424870108c8ceaadbcd"
+    },
+    {
+      "count": 2,
+      "path": "weakness_data/298.lua",
+      "sha256": "sha256:6a4682179bedef4dfe33c0344ca7b3b7ad18561d3a7f07a24b8d203c42671042"
+    },
+    {
+      "count": 11,
+      "path": "weakness_data/3.lua",
+      "sha256": "sha256:1080b0abeea19d1b2571aed4e97166324f2707402279ed247d76c7b79afb9f8f"
+    },
+    {
+      "count": 150,
+      "path": "weakness_data/30.lua",
+      "sha256": "sha256:d22435041b0835cc412e35ee2844908aa310556584a283e67b298bd3f9c97f34"
+    },
+    {
+      "count": 30,
+      "path": "weakness_data/31.lua",
+      "sha256": "sha256:31c784ed9fa1822cc6c0d2bbe00e884653f12c59f439ba28dbbf0bd0c7475834"
+    },
+    {
+      "count": 26,
+      "path": "weakness_data/33.lua",
+      "sha256": "sha256:199a25757439d15353abb595dd9449f33d963f2f22ceed14c4d275c833cee143"
+    },
+    {
+      "count": 17,
+      "path": "weakness_data/34.lua",
+      "sha256": "sha256:15369023a3367a4e6534913f3add5ea79694a9e025764bcef252fa0d606b7bd0"
+    },
+    {
+      "count": 9,
+      "path": "weakness_data/35.lua",
+      "sha256": "sha256:9a469981ba42388a49844e8338651a2ce6c5362fd78f021da8c4dc6d77f19ed0"
+    },
+    {
+      "count": 1,
+      "path": "weakness_data/36.lua",
+      "sha256": "sha256:e17accd880352b55f88f0892e9ad2da770ca5b308992d2cefda9b68bc190bd2a"
+    },
+    {
+      "count": 28,
+      "path": "weakness_data/39.lua",
+      "sha256": "sha256:99441b0406708f0d418a06f70cd98545ead7a1f3dbdd7a9cd0a8dbd55e368695"
+    },
+    {
+      "count": 263,
+      "path": "weakness_data/4.lua",
+      "sha256": "sha256:306215123e0d9036e9aabb64dc86337a1eff488f12a91bebb595d515cfd8c681"
+    },
+    {
+      "count": 37,
+      "path": "weakness_data/40.lua",
+      "sha256": "sha256:8761392ed8856da4a119ad819a6b64e76d9708d2e9cf11e9f5a7079c2277e14d"
+    },
+    {
+      "count": 32,
+      "path": "weakness_data/41.lua",
+      "sha256": "sha256:306e1ec5aea87bd9d5346757d7c1bfcffad79c34eb6f18112612272fe0b1407f"
+    },
+    {
+      "count": 14,
+      "path": "weakness_data/42.lua",
+      "sha256": "sha256:fc6fc98dcdf7729f42049f37514641ba204343be08eb4449b31d847b14e82e85"
+    },
+    {
+      "count": 13,
+      "path": "weakness_data/46.lua",
+      "sha256": "sha256:dee673a68e8ba8214a45967751cbd3f8254f230092eff05d1f6a473ae54b97f2"
+    },
+    {
+      "count": 13,
+      "path": "weakness_data/47.lua",
+      "sha256": "sha256:895040d1b48264cc47c4574d490fb09a74c0f9e3662460f0ad0c8f6dae055dd7"
+    },
+    {
+      "count": 318,
+      "path": "weakness_data/48.lua",
+      "sha256": "sha256:7d673eb1889522e8632e3f118a86908d44019dc7436f33a33aa5ab4382b67814"
+    },
+    {
+      "count": 225,
+      "path": "weakness_data/5.lua",
+      "sha256": "sha256:e5a953354473fcdaeb442cae090a10f0a2b9fea2287df6b54361673d33c530a3"
+    },
+    {
+      "count": 314,
+      "path": "weakness_data/51.lua",
+      "sha256": "sha256:490db63d3ee3241fc50e5f64ef9e233980275e5b689d7b2dbaa0defc3b5b9564"
+    },
+    {
+      "count": 183,
+      "path": "weakness_data/52.lua",
+      "sha256": "sha256:0c9b989b92930448d929e8a4bf41a5649d2d24c5e4f0662aae328b5b575e7c8a"
+    },
+    {
+      "count": 220,
+      "path": "weakness_data/54.lua",
+      "sha256": "sha256:aee20f941388c75882413b31f85025624fd93ad7a62e48168aab6ed41f2d7474"
+    },
+    {
+      "count": 65,
+      "path": "weakness_data/55.lua",
+      "sha256": "sha256:3c0c9ea09cce3a0b937918efe489cfba5209fad48706e6cb0f910100d08b7e95"
+    },
+    {
+      "count": 91,
+      "path": "weakness_data/56.lua",
+      "sha256": "sha256:6928cdfa91eaa014772cb24d92934abfd4ee8901552413613691d784e359b4de"
+    },
+    {
+      "count": 8,
+      "path": "weakness_data/57.lua",
+      "sha256": "sha256:992782e1c9f482a968080c7b5172ffaea582226884c0b8ac09df9b499cbc1e34"
+    },
+    {
+      "count": 14,
+      "path": "weakness_data/58.lua",
+      "sha256": "sha256:d7f29ab09f89a489ece5149d9a4094a2e7f1f9800f89e6fcb049a3023e20e435"
+    },
+    {
+      "count": 14,
+      "path": "weakness_data/59.lua",
+      "sha256": "sha256:1b3898501d7e4633882890b26bf19619e167ae342b9f2e830a82ddd3669c9f5d"
+    },
+    {
+      "count": 186,
+      "path": "weakness_data/61.lua",
+      "sha256": "sha256:5289791ef831157f9a250bc970eb1c5827e012fc9e797195c4cf73e453abca78"
+    },
+    {
+      "count": 184,
+      "path": "weakness_data/62.lua",
+      "sha256": "sha256:37376379768403785701065cb4b9d6b1bff79889243564a9b3b241ff9ff302bf"
+    },
+    {
+      "count": 7,
+      "path": "weakness_data/63.lua",
+      "sha256": "sha256:401cbb7c55c13702026f06e2d16ec0d2e796558fd631bf683240eaf85633ec10"
+    },
+    {
+      "count": 191,
+      "path": "weakness_data/65.lua",
+      "sha256": "sha256:24d495a124f600e335835d9143fb0fb94a3cfd7ae956ba5ab57f8952c6e84fdb"
+    },
+    {
+      "count": 39,
+      "path": "weakness_data/66.lua",
+      "sha256": "sha256:45b8d2eb6589de66eb340cadb57cd6cd452401daa18eadd0fee328b4c2baae64"
+    },
+    {
+      "count": 47,
+      "path": "weakness_data/67.lua",
+      "sha256": "sha256:64235cb03f80afa2b34cb7178e2e721b1ec03a1a1a3e5fc5b37c578f084e744d"
+    },
+    {
+      "count": 345,
+      "path": "weakness_data/68.lua",
+      "sha256": "sha256:cee4a40568d8819f8bd21e2e956c6aa906d883a99d24f3673ef79b6bb6e287b6"
+    },
+    {
+      "count": 74,
+      "path": "weakness_data/69.lua",
+      "sha256": "sha256:b8733c57adbd54f525f26aae5ee8b265c9b55ff7520940e7d24c8efaa6fa5e44"
+    },
+    {
+      "count": 316,
+      "path": "weakness_data/7.lua",
+      "sha256": "sha256:745315603525070f92412184ca0350260700e990dcafdb4c879d8d471f5bb250"
+    },
+    {
+      "count": 8,
+      "path": "weakness_data/71.lua",
+      "sha256": "sha256:7a07f0e6add63bc24f13d6cdff5be9eba061d24803da23bac31e07b269a79136"
+    },
+    {
+      "count": 18,
+      "path": "weakness_data/72.lua",
+      "sha256": "sha256:74043c8ff430b9bc608bbabbf349c2a5a9db425ad6106b9592a83de3b2de5450"
+    },
+    {
+      "count": 27,
+      "path": "weakness_data/73.lua",
+      "sha256": "sha256:e0ad5219b7c42d9c37edfcca56a213ced5499014e47fa3990938901aebc77988"
+    },
+    {
+      "count": 118,
+      "path": "weakness_data/74.lua",
+      "sha256": "sha256:d0354d56e6cda32bdaf5cf9daca7e097c8266ba6eea760a031ca64cb20f78376"
+    },
+    {
+      "count": 18,
+      "path": "weakness_data/75.lua",
+      "sha256": "sha256:d54b7b247bf2338ea5225e3f924279a1529d0b337b277cce2a7016fe140ab1af"
+    },
+    {
+      "count": 291,
+      "path": "weakness_data/76.lua",
+      "sha256": "sha256:092c14b4a28e54e3cc06664d576bfe1e807311f3acfdaf37fff7655a4a62ccd5"
+    },
+    {
+      "count": 3,
+      "path": "weakness_data/77.lua",
+      "sha256": "sha256:17a98a6e76a5937bfa168e3ab7fa0d9beeda36d6a16ad2e792ed324b363850b1"
+    },
+    {
+      "count": 307,
+      "path": "weakness_data/78.lua",
+      "sha256": "sha256:910927f51a0a8d8173adbd82b5346ffbbdc89a2efe0a7b23f0fa6e115e3d57e8"
+    },
+    {
+      "count": 255,
+      "path": "weakness_data/79.lua",
+      "sha256": "sha256:e60dd13c7c7f158deaeadad7875a29b4b2510e43e5e71226a43e1cef395807fb"
+    },
+    {
+      "count": 27,
+      "path": "weakness_data/8.lua",
+      "sha256": "sha256:965939b0b16b6250d23d8b835e2344491107491deb138a637abdd21adcb3e3cd"
+    },
+    {
+      "count": 394,
+      "path": "weakness_data/81.lua",
+      "sha256": "sha256:31c9e7e15b720b7fe2d24a2927173e7fb119e89cdf35ea30385696ba8cd9391b"
+    },
+    {
+      "count": 393,
+      "path": "weakness_data/82.lua",
+      "sha256": "sha256:ed4020501535604c7a8ad9b6f39f112df9ebc16c2ddb96b0b3bb820b6a49df6d"
+    },
+    {
+      "count": 398,
+      "path": "weakness_data/83.lua",
+      "sha256": "sha256:9e35d2022c45d0744bc6475e1236de5b866886047d2cb226834bec3493f28a71"
+    },
+    {
+      "count": 315,
+      "path": "weakness_data/84.lua",
+      "sha256": "sha256:ed299520adcde08fc7ed24082de91bd9039cd71402e588d45369d1608de7175c"
+    },
+    {
+      "count": 299,
+      "path": "weakness_data/85.lua",
+      "sha256": "sha256:1c57208ced460c75c70450da9581b140df02a2b9b5d793b9f0641af2e20164a1"
+    },
+    {
+      "count": 336,
+      "path": "weakness_data/88.lua",
+      "sha256": "sha256:345ccf659eb0bf459ab6dbc39964f6edd5d886343672d2c257325a47e1e6dbd2"
+    },
+    {
+      "count": 352,
+      "path": "weakness_data/89.lua",
+      "sha256": "sha256:68471eb7b37cd31f2a709c16a726e0bf1cf8f829c7816c1505c989cf7fd1b899"
+    },
+    {
+      "count": 259,
+      "path": "weakness_data/9.lua",
+      "sha256": "sha256:25d08f6c7403f4b8300db296430dfc3c94fd7814d58f676feb12014e58a41dcc"
+    },
+    {
+      "count": 301,
+      "path": "weakness_data/90.lua",
+      "sha256": "sha256:3bada31234a822f6c408b0d4afe10d70ff4dfbf00ca246254dff94af6a172e59"
+    },
+    {
+      "count": 315,
+      "path": "weakness_data/91.lua",
+      "sha256": "sha256:72fa8f64d3f58ff93f3e238636a8937468b844d61753443bbbfb428520feb04a"
+    },
+    {
+      "count": 331,
+      "path": "weakness_data/92.lua",
+      "sha256": "sha256:044c1dc88bd68c0f42d6053093602e3776512ba90548a96c31e79d1daa27af88"
+    },
+    {
+      "count": 84,
+      "path": "weakness_data/94.lua",
+      "sha256": "sha256:c0aa1032fa595dfdb4d67b12a89d3a59b7ba0b5bc4d211cc2281be71eb3d3b0a"
+    },
+    {
+      "count": 485,
+      "path": "weakness_data/95.lua",
+      "sha256": "sha256:28b597761455e4d436161c6aabea3d8d9f4ae9fdb4e76d5d51b486ed3d640c33"
+    },
+    {
+      "count": 283,
+      "path": "weakness_data/96.lua",
+      "sha256": "sha256:f40da806b764f2715ecff01f856dbaf221771906b1627bdb37a3a4af65fa0fd2"
+    },
+    {
+      "count": 476,
+      "path": "weakness_data/97.lua",
+      "sha256": "sha256:f1fd6c957217f63d4712feba43dbfa848918a781d58cb30392d26f162dc627f8"
+    },
+    {
+      "count": 329,
+      "path": "weakness_data/98.lua",
+      "sha256": "sha256:bcf93e1a8528860168b5c7cf3b6aedc3a8bc65dcfd16122b07b9b84abe9f307f"
+    },
+    {
+      "count": 287,
+      "path": "weakness_data/99.lua",
+      "sha256": "sha256:1d848407ecb1dd9d3b7ab0156f73e629e4538303cf457e5ae7323b759e44d876"
+    }
+  ],
+  "generatorSha256": "sha256:0e7e3fcc50475d2ad2d4e220b486f7163b907e94e70724fb6bd97736ea617bb6",
+  "includedTargetCount": 22869,
+  "kind": "oddcast-static-weakness-data",
+  "materialInputCount": 4341,
+  "policy": "exact-spawn-v1:no-zero-position,no-missing-join,no-magic-pool-mod,no-magic-species-mod,no-direct-script,no-zone-mixin",
+  "profileCount": 298,
+  "schema": 1,
+  "sourceCommit": "4cf9796860e4a1fd338df15ee9b45406678400b9",
+  "sourceSha256": "sha256:4cd25d99352991936abf2af8892f3f5685bfca669a10ba0adb97951d846f90d5",
+  "sourceSpawnCount": 85845,
+  "zoneCount": 139
+}

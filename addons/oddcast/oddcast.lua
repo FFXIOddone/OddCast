@@ -1,7 +1,7 @@
 addon.name = 'oddcast';
 addon.author = 'OddLua';
-addon.version = '0.1.1';
-addon.desc = 'Selects a ready nuke for the current Vana day and fails closed on unvalidated weakness data.';
+addon.version = '0.2.0';
+addon.desc = 'Selects a ready nuke for the current Vana day or a validated static target baseline.';
 
 require('common');
 local bit = require('bit');
@@ -10,6 +10,11 @@ local chat = require('chat');
 local VANA_TIME_SIGNATURE = 'B0015EC390518B4C24088D4424005068';
 local VANA_TIME_EPOCH_OFFSET = 92514960;
 local VANA_DAY_SECONDS = 3456;
+
+local WEAKNESS_SCHEMA = 1;
+local WEAKNESS_INDEX_FILE = 'weakness_data.lua';
+local weaknessIndex = nil;
+local weaknessZone = nil;
 
 local dayElements = {
     { day = 'Firesday', element = 'Fire' },
@@ -72,6 +77,8 @@ local spells = {
 
 local vanaTimeAddress = nil;
 
+local weaknessElements = { 'Fire', 'Ice', 'Wind', 'Earth', 'Lightning', 'Water' };
+
 local function safe(defaultValue, callback)
     local ok, value = pcall(callback);
     if ok and value ~= nil then
@@ -83,6 +90,162 @@ end
 local function message(text, isError)
     local formatter = isError and chat.error or chat.message;
     print(chat.header('OddCast') .. formatter(text));
+end
+
+local function isInteger(value)
+    return type(value) == 'number'
+        and value == value
+        and value > -math.huge
+        and value < math.huge
+        and value == math.floor(value);
+end
+
+local function isPositiveInteger(value)
+    return isInteger(value) and value > 0;
+end
+
+local function isNonNegativeInteger(value)
+    return isInteger(value) and value >= 0;
+end
+
+local function isSha256(value)
+    return type(value) == 'string'
+        and #value == 71
+        and string.match(value, '^sha256:%x+$') ~= nil;
+end
+
+local function addonFile(relativePath)
+    local base = tostring(addon.path or '');
+    if base == '' then
+        return nil;
+    end
+    local last = string.sub(base, -1);
+    if last == '/' or last == '\\' then
+        return base .. relativePath;
+    end
+    return base .. '/' .. relativePath;
+end
+
+local function validProfile(profile)
+    if type(profile) ~= 'table' then
+        return false;
+    end
+    local count = 0;
+    for index, value in pairs(profile) do
+        count = count + 1;
+        if not isInteger(index)
+            or index < 1
+            or index > 12
+            or not isInteger(value)
+            or (index >= 7 and (value < -3 or value > 11))
+        then
+            return false;
+        end
+    end
+    return count == 12;
+end
+
+local function loadWeaknessIndex()
+    if weaknessIndex ~= nil then
+        return weaknessIndex, nil;
+    end
+
+    local path = addonFile(WEAKNESS_INDEX_FILE);
+    if path == nil then
+        return nil, 'OddCast addon path is unavailable; no spell was queued.';
+    end
+    local ok, data = pcall(dofile, path);
+    if not ok or type(data) ~= 'table' then
+        return nil, 'Weakness index is missing or unreadable; no spell was queued.';
+    end
+    if data.schema ~= WEAKNESS_SCHEMA
+        or not isSha256(data.sourceSha256)
+        or type(data.elements) ~= 'table'
+        or type(data.profiles) ~= 'table'
+        or type(data.zoneFiles) ~= 'table'
+    then
+        return nil, 'Weakness index is malformed; no spell was queued.';
+    end
+    local elementCount = 0;
+    for key in pairs(data.elements) do
+        elementCount = elementCount + 1;
+        if not isPositiveInteger(key) or key > #weaknessElements then
+            return nil, 'Weakness index element list is invalid; no spell was queued.';
+        end
+    end
+    for index, element in ipairs(weaknessElements) do
+        if data.elements[index] ~= element then
+            return nil, 'Weakness index element order is invalid; no spell was queued.';
+        end
+    end
+    if elementCount ~= #weaknessElements then
+        return nil, 'Weakness index element list is invalid; no spell was queued.';
+    end
+    for profileId, profile in pairs(data.profiles) do
+        if not isNonNegativeInteger(profileId) or not validProfile(profile) then
+            return nil, 'Weakness index contains a malformed resistance profile; no spell was queued.';
+        end
+    end
+
+    weaknessIndex = data;
+    return weaknessIndex, nil;
+end
+
+local function loadWeaknessZone(zone)
+    local index, indexError = loadWeaknessIndex();
+    if index == nil then
+        return nil, indexError;
+    end
+    if weaknessZone ~= nil and weaknessZone.zone == zone then
+        return weaknessZone, nil;
+    end
+    -- Retain at most the currently requested zone's records.
+    weaknessZone = nil;
+
+    local entry = index.zoneFiles[zone];
+    local expectedPath = string.format('weakness_data/%d.lua', zone);
+    if type(entry) ~= 'table'
+        or entry.path ~= expectedPath
+        or not isSha256(entry.sha256)
+        or not isInteger(entry.count)
+        or entry.count < 0
+    then
+        return nil, 'No validated weakness data exists for the current zone; no spell was queued.';
+    end
+
+    local path = addonFile(entry.path);
+    local ok, data = pcall(dofile, path);
+    if not ok or type(data) ~= 'table' then
+        return nil, 'Current-zone weakness data is missing or unreadable; no spell was queued.';
+    end
+    if data.schema ~= WEAKNESS_SCHEMA
+        or data.zone ~= zone
+        or data.sourceSha256 ~= index.sourceSha256
+        or type(data.records) ~= 'table'
+    then
+        return nil, 'Current-zone weakness data is malformed; no spell was queued.';
+    end
+
+    local count = 0;
+    for targetIndex, record in pairs(data.records) do
+        count = count + 1;
+        if not isPositiveInteger(targetIndex)
+            or type(record) ~= 'table'
+            or not isPositiveInteger(record[1])
+            or type(record[2]) ~= 'string'
+            or record[2] == ''
+            or not isNonNegativeInteger(record[3])
+            or index.profiles[record[3]] == nil
+        then
+            return nil, 'Current-zone weakness data contains a malformed target record; no spell was queued.';
+        end
+    end
+    if count ~= entry.count then
+        return nil, 'Current-zone weakness record count does not match its index; no spell was queued.';
+    end
+
+    weaknessZone = data;
+    return weaknessZone, nil;
 end
 
 local function currentTarget()
@@ -113,7 +276,24 @@ local function currentTarget()
         return nil, 'The selected monster has no readable name.';
     end
 
-    return { index = index, name = name, memory = memory }, nil;
+    local serverId = tonumber(safe(nil, function() return entity:GetServerId(index); end));
+    if not isPositiveInteger(serverId) then
+        return nil, 'The selected monster has no readable server ID.';
+    end
+
+    local party = safe(nil, function() return memory:GetParty(); end);
+    local zone = party and tonumber(safe(nil, function() return party:GetMemberZone(0); end)) or nil;
+    if not isPositiveInteger(zone) then
+        return nil, 'The current zone is unavailable.';
+    end
+
+    return {
+        index = index,
+        serverId = serverId,
+        name = name,
+        zone = zone,
+        memory = memory,
+    }, nil;
 end
 
 local function currentDay()
@@ -207,20 +387,15 @@ local function readySpells(memory)
     return output, nil;
 end
 
-local function cast(spell, expectedTarget, expectedZone)
+local function cast(spell, expectedTarget)
     local actualTarget = currentTarget();
     if actualTarget == nil
         or actualTarget.index ~= expectedTarget.index
+        or actualTarget.serverId ~= expectedTarget.serverId
         or actualTarget.name ~= expectedTarget.name
+        or actualTarget.zone ~= expectedTarget.zone
     then
         return false, 'Target changed during selection; no spell was queued.';
-    end
-    if expectedZone ~= nil then
-        local party = safe(nil, function() return actualTarget.memory:GetParty(); end);
-        local actualZone = party and tonumber(safe(nil, function() return party:GetMemberZone(0); end)) or nil;
-        if actualZone ~= expectedZone then
-            return false, 'Zone changed during selection; no spell was queued.';
-        end
     end
 
     local chatManager = safe(nil, function() return AshitaCore:GetChatManager(); end);
@@ -270,7 +445,7 @@ local function chooseDay(target)
         return;
     end
 
-    local queued, queueError = cast(best, target, nil);
+    local queued, queueError = cast(best, target);
     if not queued then
         message(queueError, true);
         return;
@@ -278,16 +453,110 @@ local function chooseDay(target)
     message(string.format('%s (%s): queued %s.', day.day, day.element, best.name), false);
 end
 
-local function chooseWeakness()
-    message(
-        'Weakness selection is disabled: legacy MobDB modifiers are not validated against current CatsEye resistance data; no spell was queued.',
-        true
-    );
+local function weaknessProfile(target)
+    local zoneData, zoneError = loadWeaknessZone(target.zone);
+    if zoneData == nil then
+        return nil, zoneError;
+    end
+
+    local record = zoneData.records[target.index];
+    if type(record) ~= 'table'
+        or record[1] ~= target.serverId
+        or record[2] ~= target.name
+    then
+        return nil, 'No exact weakness record matches this target; no spell was queued.';
+    end
+
+    local index, indexError = loadWeaknessIndex();
+    if index == nil then
+        return nil, indexError;
+    end
+    local profile = index.profiles[record[3]];
+    if not validProfile(profile) then
+        return nil, 'The target weakness profile is malformed; no spell was queued.';
+    end
+    return profile, nil;
+end
+
+local function chooseWeakness(target)
+    local profile, profileError = weaknessProfile(target);
+    if profile == nil then
+        message(profileError, true);
+        return;
+    end
+
+    local ready, readyError = readySpells(target.memory);
+    if ready == nil then
+        message(readyError, true);
+        return;
+    end
+
+    local bestByElement = {};
+    for _, spell in ipairs(ready) do
+        if spell.weak then
+            local current = bestByElement[spell.element];
+            if current == nil
+                or spell.power > current.power
+                or (spell.power == current.power and spell.tier > current.tier)
+            then
+                bestByElement[spell.element] = spell;
+            end
+        end
+    end
+
+    local candidates = {};
+    for index, element in ipairs(weaknessElements) do
+        local spell = bestByElement[element];
+        if spell ~= nil then
+            local multiplier = math.max(0, math.min(30000, 10000 + profile[index]));
+            candidates[#candidates + 1] = {
+                spell = spell,
+                baseline = spell.power * multiplier,
+                rank = profile[index + #weaknessElements],
+            };
+        end
+    end
+    if #candidates == 0 then
+        message('No ready six-element tier-line spell is available; no spell was queued.', true);
+        return;
+    end
+
+    local winners = {};
+    for _, candidate in ipairs(candidates) do
+        local dominatesAll = true;
+        for _, other in ipairs(candidates) do
+            if candidate ~= other then
+                local noWorse = candidate.baseline >= other.baseline
+                    and candidate.rank <= other.rank;
+                local strictlyBetter = candidate.baseline > other.baseline
+                    or candidate.rank < other.rank;
+                if not noWorse or not strictlyBetter then
+                    dominatesAll = false;
+                    break;
+                end
+            end
+        end
+        if dominatesAll then
+            winners[#winners + 1] = candidate;
+        end
+    end
+    if #winners ~= 1 then
+        message('Static baseline comparison is tied or has a potency/rank tradeoff; no spell was queued.', true);
+        return;
+    end
+
+    local best = winners[1].spell;
+    local queued, queueError = cast(best, target);
+    if not queued then
+        message(queueError, true);
+        return;
+    end
+    message(string.format('%s: static baseline recommendation queued %s.', target.name, best.name), false);
 end
 
 local function showHelp()
     message('/oddcast day | /oc day - highest modeled ready spell matching the current Vana day.', false);
-    message('/oddcast weakness | /oc weak - disabled until exact CatsEye target resistance data is validated.', false);
+    message('/oddcast weakness | /oc weak - dominance-safe static baseline for an exact indexed target.', false);
 end
 
 ashita.events.register('command', 'oddcast_command_cb', function(e)
@@ -313,16 +582,20 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
     end
 
     if action == 'weak' or action == 'weakness' then
-        chooseWeakness();
-        return;
+        local target, targetError = currentTarget();
+        if target == nil then
+            message(targetError, true);
+            return;
+        end
+        chooseWeakness(target);
+    else
+        local target, targetError = currentTarget();
+        if target == nil then
+            message(targetError, true);
+            return;
+        end
+        chooseDay(target);
     end
-
-    local target, targetError = currentTarget();
-    if target == nil then
-        message(targetError, true);
-        return;
-    end
-    chooseDay(target);
 end);
 
 ashita.events.register('load', 'oddcast_load_cb', function()
