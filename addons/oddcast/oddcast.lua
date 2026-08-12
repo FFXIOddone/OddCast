@@ -1,6 +1,10 @@
+-- SPDX-License-Identifier: GPL-3.0-or-later
+-- Copyright (c) 2026 Oddone
+-- Modified for OddCast on 2026-08-12; see THIRD_PARTY_NOTICES.md.
+
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '0.2.3';
+addon.version = '0.2.4';
 addon.desc = 'Selects a ready nuke for the current Vana day or a typical mob-family weakness.';
 
 require('common');
@@ -31,7 +35,11 @@ pcall(ffi.cdef, [[
     typedef OddCastBattleActor* (__stdcall* OddCastSeekBattleActor_f)(void);
 ]]);
 
+-- Provenance: Vana'diel-time signature and relative pointer-chain constants were
+-- adapted from LuAshitacast by ThornyFFXI (MIT). See THIRD_PARTY_NOTICES.md.
 local VANA_TIME_SIGNATURE = 'B0015EC390518B4C24088D4424005068';
+-- Provenance: <bt> signature and FFI actor layout adapted from FancyChat's
+-- targets.lua (Ashita Development Team, GPL-3.0-or-later). See THIRD_PARTY_NOTICES.md.
 local BATTLE_TARGET_SIGNATURE = '66A1????????83EC186685C053565774??0FBFC08B0C85';
 local VANA_TIME_EPOCH_OFFSET = 92514960;
 local VANA_DAY_SECONDS = 3456;

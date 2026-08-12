@@ -11,7 +11,7 @@ day length `3456` -- was adapted from LuAshitacast.
 - Relevant upstream files: `state.lua` and `data.lua`
 - License: MIT
 - Copyright: Copyright (c) 2021 ThornyFFXI
-- Bundled license text: [`LICENSE-LUASHITACAST-MIT`](LICENSE-LUASHITACAST-MIT)
+- Bundled license text: `LICENSE-LUASHITACAST-MIT`
 
 No affiliation with or endorsement by LuAshitacast or ThornyFFXI is implied.
 
@@ -50,26 +50,24 @@ signature, `XiAtelBuff` / character-ID FFI layout, and the associated
 - FancyChat author: Arielfy
 - Source copyright: Copyright (c) 2024 Ashita Development Team
 - License: GPL-3.0-or-later
-- Bundled license text: `addons/oddcast/LICENSE-ODDCAST-GPL-3.0`
+- Bundled license text: `LICENSE-ODDCAST-GPL-3.0`
 - Installed source SHA-256 reviewed: `1ff17392b66b573c77bf2db3ceedc6fd444e4b9eb12bf9dc7d3e839794c6209c`
 
-OddCast's `addons/oddcast/oddcast.lua` is consequently distributed under
+OddCast's `oddcast.lua` is consequently distributed under
 GPL-3.0-or-later. No affiliation with or endorsement by FancyChat, Arielfy, or
 the Ashita Development Team is implied.
 
 ## CatsEyeXI/LandSandBoat-derived weakness data
 
-`addons/oddcast/weakness_data.lua` and `weakness_data_manifest.json` are
-generated from monster spawn, pool, family, resistance, spell-formula, and enum
-metadata in the CatsEyeXI/LandSandBoat server source.
+`weakness_data.lua` and `weakness_data_manifest.json` are generated from
+monster spawn, pool, family, resistance, spell-formula, and enum metadata in
+the CatsEyeXI/LandSandBoat server source.
 
 - Upstream: <https://github.com/CatsAndBoats/catseyexi>
+- Contributors: CatsEyeXI/LandSandBoat contributors
 - Source commit: `4cf9796860e4a1fd338df15ee9b45406678400b9`
-- Data license: GNU General Public License version 3 or later
-- License text: [`LICENSE-DATA-GPL-3.0`](LICENSE-DATA-GPL-3.0)
+- Data license: GPL-3.0-or-later
+- Bundled license text: `LICENSE-ODDCAST-GPL-3.0`
 
-The generated index and manifest embed an aggregate SHA-256 identity for every
-material input used by the generator. OddCast's separately authored Python
-tooling and tests remain available under the repository's MIT license;
-`addons/oddcast/oddcast.lua` and the generated server-derived dataset are
-distributed under the GPL terms described above.
+The generated table and manifest embed an aggregate SHA-256 identity for every
+material input used by the generator.

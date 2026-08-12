@@ -34,6 +34,106 @@ def test_oddcast_metadata_credits_oddone() -> None:
     assert "addon.author = 'OddLua';" not in addon_text
 
 
+def test_luashitacast_vana_time_adaptation_has_complete_attribution() -> None:
+    addon_text = ODDCAST_PATH.read_text(encoding="utf-8")
+    readme_texts = (
+        (ROOT / "README.md").read_text(encoding="utf-8"),
+        (ODDCAST_DIR / "README.md").read_text(encoding="utf-8"),
+    )
+    notice_texts = (
+        (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"),
+        (ODDCAST_DIR / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"),
+    )
+    license_texts = (
+        (ROOT / "LICENSE-LUASHITACAST-MIT").read_text(encoding="utf-8"),
+        (ODDCAST_DIR / "LICENSE-LUASHITACAST-MIT").read_text(encoding="utf-8"),
+    )
+
+    provenance = (
+        "-- Provenance: Vana'diel-time signature and relative pointer-chain constants were\n"
+        "-- adapted from LuAshitacast by ThornyFFXI (MIT). See THIRD_PARTY_NOTICES.md."
+    )
+    provenance_index = addon_text.index(provenance)
+    signature_index = addon_text.index("local VANA_TIME_SIGNATURE")
+    assert 0 < signature_index - provenance_index < 300
+    assert "addon.version = '0.2.4';" in addon_text
+
+    for text in readme_texts + notice_texts:
+        assert "https://github.com/ThornyFFXI/LuAshitacast" in text
+        assert "ThornyFFXI" in text
+        assert "MIT License" in text
+
+    assert license_texts[0] == license_texts[1]
+    for token in (
+        "Copyright (c) 2021 ThornyFFXI",
+        "Permission is hereby granted, free of charge",
+        "The above copyright notice and this permission notice shall be included",
+        'THE SOFTWARE IS PROVIDED "AS IS"',
+    ):
+        for text in notice_texts + license_texts:
+            assert token in text
+    for notice_text in notice_texts:
+        assert "e4a391815722bbb84c802f87a1bc66568fc6e2fd" in notice_text
+        assert license_texts[0].strip() in notice_text
+
+
+def test_fancychat_battle_target_adaptation_has_complete_attribution() -> None:
+    addon_text = ODDCAST_PATH.read_text(encoding="utf-8")
+    readme_texts = (
+        (ROOT / "README.md").read_text(encoding="utf-8"),
+        (ODDCAST_DIR / "README.md").read_text(encoding="utf-8"),
+    )
+    notice_texts = (
+        (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"),
+        (ODDCAST_DIR / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"),
+    )
+    gpl_text = (ODDCAST_DIR / "LICENSE-ODDCAST-GPL-3.0").read_text(
+        encoding="utf-8"
+    )
+    canonical_gpl_text = (ROOT / "LICENSE-DATA-GPL-3.0").read_text(
+        encoding="utf-8"
+    )
+
+    provenance = (
+        "-- Provenance: <bt> signature and FFI actor layout adapted from FancyChat's\n"
+        "-- targets.lua (Ashita Development Team, GPL-3.0-or-later). See THIRD_PARTY_NOTICES.md."
+    )
+    provenance_index = addon_text.index(provenance)
+    signature_index = addon_text.index("local BATTLE_TARGET_SIGNATURE")
+    assert 0 < signature_index - provenance_index < 300
+    assert addon_text.startswith("-- SPDX-License-Identifier: GPL-3.0-or-later\n")
+    assert "-- Modified for OddCast on 2026-08-12; see THIRD_PARTY_NOTICES.md." in addon_text
+    assert gpl_text == canonical_gpl_text
+
+    for text in readme_texts + notice_texts:
+        assert "https://www.ashitaxi.com/" in text
+        assert "Ashita Development Team" in text
+        assert "GPL-3.0-or-later" in text
+        assert "FancyChat" in text
+    for notice_text in notice_texts:
+        assert "Arielfy" in notice_text
+        assert "1ff17392b66b573c77bf2db3ceedc6fd444e4b9eb12bf9dc7d3e839794c6209c" in notice_text
+    assert "GNU GENERAL PUBLIC LICENSE" in gpl_text
+    for text in readme_texts + notice_texts:
+        assert "OddCast's handwritten addon and tooling are MIT licensed" not in text
+        assert "handwritten addon and tooling remain" not in text
+
+
+def test_catseye_weakness_data_notice_ships_with_the_addon() -> None:
+    notice_text = (ODDCAST_DIR / "THIRD_PARTY_NOTICES.md").read_text(
+        encoding="utf-8"
+    )
+    for token in (
+        "CatsEyeXI/LandSandBoat-derived weakness data",
+        "https://github.com/CatsAndBoats/catseyexi",
+        "CatsEyeXI/LandSandBoat contributors",
+        "4cf9796860e4a1fd338df15ee9b45406678400b9",
+        "GPL-3.0-or-later",
+        "LICENSE-ODDCAST-GPL-3.0",
+    ):
+        assert token in notice_text
+
+
 def test_oddcast_day_table_is_complete_and_in_vana_week_order() -> None:
     addon_text = ODDCAST_PATH.read_text(encoding="utf-8")
     rows = re.findall(

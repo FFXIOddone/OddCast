@@ -7,11 +7,12 @@ rotation, and no packet injection.
 ## Requirements
 
 - Ashita v4
-- a current LuAshitacast-compatible FFXI client (OddCast uses the same validated
-  Vana time signature)
+- a supported FFXI client build with the validated Vana'diel-time layout
 
 Copy the complete `addons\oddcast` directory to `Ashita\addons\oddcast`. The
-installed copy must include `oddcast.lua` and `weakness_data.lua`. Then run:
+installed copy must include `oddcast.lua`, `weakness_data.lua`,
+`THIRD_PARTY_NOTICES.md`, `LICENSE-LUASHITACAST-MIT`, and
+`LICENSE-ODDCAST-GPL-3.0`. Then run:
 
 ```text
 /addon load oddcast
@@ -86,6 +87,27 @@ lines. AoE, ancient magic, divine/light, helix damage-over-time, Drain, and
 differently scaled spell families are not compared. Light and dark day commands
 can still use a ready direct light/dark spell, with Drain as a Darksday fallback.
 
+## Third-party attribution
+
+OddCast determines the Vana'diel-time location at runtime by scanning
+`FFXiMain.dll` for a byte signature and following relative pointer offsets; it
+does not contain a fixed absolute process address. That read-only signature,
+pointer chain, epoch offset, and day-length calculation were adapted from
+[LuAshitacast](https://github.com/ThornyFFXI/LuAshitacast) by ThornyFFXI under
+the MIT License. LuAshitacast is an implementation source, not an OddCast
+runtime dependency. No affiliation with or endorsement by LuAshitacast or
+ThornyFFXI is implied. The complete copyright and permission notice is bundled
+in `addons/oddcast/THIRD_PARTY_NOTICES.md` and
+`addons/oddcast/LICENSE-LUASHITACAST-MIT`.
+
+OddCast's exact `<bt>` identity resolver uses a function signature and FFI
+actor layout adapted from FancyChat's `targets.lua`, as distributed with the
+[Ashita](https://www.ashitaxi.com/) installation reviewed for this release.
+That source is copyright (c) 2024 Ashita Development Team and licensed under
+GPL-3.0-or-later; FancyChat is authored by Arielfy.
+OddCast is not affiliated with or endorsed by FancyChat, Arielfy, or the Ashita
+Development Team. Full details and license text are bundled with the addon.
+
 ## Offline validation
 
 Development checks require Python 3.10 or newer, `pytest`, and a `luajit`
@@ -116,7 +138,11 @@ client; distribution remains subject to the server's addon approval policy.
 
 ## Licensing
 
-OddCast's handwritten addon and tooling are MIT licensed. The generated
-`weakness_data.lua` and `weakness_data_manifest.json` are derived from the
-pinned CatsEye server source and are GPL-3.0-or-later. See
-`THIRD_PARTY_NOTICES.md` and `LICENSE-DATA-GPL-3.0`.
+`addons/oddcast/oddcast.lua` is GPL-3.0-or-later because its `<bt>` resolver
+adapts GPL-licensed FancyChat code. OddCast's separately authored Python
+tooling and tests remain MIT licensed under the repository-root `LICENSE`.
+The generated `weakness_data.lua` and `weakness_data_manifest.json` are derived
+from the pinned CatsEye server source and are GPL-3.0-or-later. See
+`THIRD_PARTY_NOTICES.md`, `LICENSE-DATA-GPL-3.0`,
+`addons/oddcast/LICENSE-ODDCAST-GPL-3.0`, and
+`LICENSE-LUASHITACAST-MIT`.
