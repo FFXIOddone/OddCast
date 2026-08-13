@@ -43,6 +43,11 @@ profile wins; the lowest profile ID breaks an exact vote tie. OddCast chooses
 the available element with the best resistance rank, then the strongest
 `base power * elemental SDT` spell within that rank.
 
+When a custom mob has no exact name or family match, `weak` falls back to the
+strongest modeled ready spell across the six comparable elemental tier lines.
+Missing or malformed weakness data still fails closed rather than bypassing
+the validated catalog.
+
 Ready means all of the following are true: the spell is learned, the current
 main or subjob can use it at its current level, current MP covers its cost, and
 its recast is zero.
@@ -68,8 +73,8 @@ OddCast has already selected a spell. An active subtarget cursor makes `<t>`
 fail closed; finish or cancel it before using OddCast.
 
 Missing or invalid settings, targets, spell resources, job levels, MP, recast
-data, Vana time, weakness data, or the chat command queue all fail closed and
-submit nothing. OddCast resolves the configured token first, then rechecks the
+data, Vana time, the weakness index, or the chat command queue all fail closed
+and submit nothing. OddCast resolves the configured token first, then rechecks the
 same token's zone, target index, server ID, and target name immediately before
 either command is submitted. Normal FFXI checks still decide whether the queued
 command executes; OddCast does not claim the caster remained in range,

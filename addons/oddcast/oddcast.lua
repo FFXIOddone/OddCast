@@ -4,8 +4,8 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '0.2.4';
-addon.desc = 'Selects a ready nuke for the current Vana day or a typical mob-family weakness.';
+addon.version = '0.2.5';
+addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
 local bit = require('bit');
@@ -604,17 +604,20 @@ local function weaknessProfile(target)
         end
     end
     if profileId == nil then
-        return nil, 'No typical mob-family weakness matches this target; no spell was queued.';
+        -- Keep the validated index as the authority for recognized targets,
+        -- but give custom mobs a neutral profile so the normal comparator
+        -- chooses the strongest ready six-element tier-line spell.
+        return { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, nil, true;
     end
     local profile = index.profiles[profileId];
     if not validProfile(profile) then
         return nil, 'The target weakness profile is malformed; no spell was queued.';
     end
-    return profile, nil;
+    return profile, nil, false;
 end
 
 local function chooseWeakness(target)
-    local profile, profileError = weaknessProfile(target);
+    local profile, profileError, usedFallback = weaknessProfile(target);
     if profile == nil then
         message(profileError, true);
         return false;
@@ -677,7 +680,18 @@ local function chooseWeakness(target)
         message(queueError, true);
         return false;
     end
-    message(string.format('%s: typical family baseline submitted %s.', target.name, best.name), false);
+    if usedFallback then
+        message(
+            string.format(
+                '%s: Target weakness unavailable; submitted strongest modeled ready spell %s.',
+                target.name,
+                best.name
+            ),
+            false
+        );
+    else
+        message(string.format('%s: typical family baseline submitted %s.', target.name, best.name), false);
+    end
     return true;
 end
 

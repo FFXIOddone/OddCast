@@ -56,7 +56,7 @@ def test_luashitacast_vana_time_adaptation_has_complete_attribution() -> None:
     provenance_index = addon_text.index(provenance)
     signature_index = addon_text.index("local VANA_TIME_SIGNATURE")
     assert 0 < signature_index - provenance_index < 300
-    assert "addon.version = '0.2.4';" in addon_text
+    assert "addon.version = '0.2.5';" in addon_text
 
     for text in readme_texts + notice_texts:
         assert "https://github.com/ThornyFFXI/LuAshitacast" in text
@@ -584,6 +584,13 @@ def test_oddcast_global_mob_weakness_selection_contract(tmp_path: Path) -> None:
                 "local sawClaim = false",
                 "for _, line in ipairs(output) do if string.find(line, 'typical family baseline', 1, true) then sawClaim=true end end",
                 "assert(sawClaim, 'success output omitted the typical family boundary')",
+                "targetName = 'Custom Catseye Mob'",
+                "invoke('/oc', 'weak')",
+                "assert(#queued == 4 and queued[4].command == '/ma \"Thunder V\" <t>', 'unidentified target did not choose the strongest modeled ready spell')",
+                "confirm(168)",
+                "local sawFallback = false",
+                "for _, line in ipairs(output) do if string.find(line, 'Target weakness unavailable', 1, true) then sawFallback=true end end",
+                "assert(sawFallback, 'unidentified-target fallback was not explained')",
                 "reset(indexData(dominant))",
                 "targetZone = 199",
                 "invoke('/oc', 'weak')",
