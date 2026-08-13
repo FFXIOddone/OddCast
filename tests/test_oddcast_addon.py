@@ -56,7 +56,7 @@ def test_luashitacast_vana_time_adaptation_has_complete_attribution() -> None:
     provenance_index = addon_text.index(provenance)
     signature_index = addon_text.index("local VANA_TIME_SIGNATURE")
     assert 0 < signature_index - provenance_index < 300
-    assert "addon.version = '0.2.8';" in addon_text
+    assert "addon.version = '1.0.0';" in addon_text
 
     for text in readme_texts + notice_texts:
         assert "https://github.com/ThornyFFXI/LuAshitacast" in text
@@ -248,6 +248,7 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "T = function(value) return value end",
                 "struct = { unpack=function(_, data) return data.actorId end }",
                 "package.preload['common'] = function() return true end",
+                "package.preload['imgui'] = function() return {} end",
                 "package.preload['settings'] = function()",
                 "    return { load=function() return activeSettings end, save=function() return true end, register=function() return true end }",
                 "end",
@@ -530,6 +531,7 @@ def test_oddcast_global_mob_weakness_selection_contract(tmp_path: Path) -> None:
                 "T = function(value) return value end",
                 "struct = { unpack=function(_, data) return data.actorId end }",
                 "package.preload['common'] = function() return true end",
+                "package.preload['imgui'] = function() return {} end",
                 "package.preload['settings'] = function()",
                 "    return { load=function() return activeSettings end, save=function() return true end, register=function() return true end }",
                 "end",
@@ -717,6 +719,7 @@ def test_oddcast_generated_damselfly_and_goblin_profiles_ignore_zone_identity(
                 "T = function(value) return value end",
                 "struct = {unpack=function(_,data) return data.actorId end}",
                 "package.preload['common'] = function() return true end",
+                "package.preload['imgui'] = function() return {} end",
                 "package.preload['settings'] = function() local value={target='<t>',dayTierCeiling=5,weaknessTierCeiling=5}; return {load=function() return value end,save=function() return true end,register=function() return true end} end",
                 "package.loaded['ffi'] = nil",
                 "package.preload['ffi'] = function() return {cdef=function() end,cast=function() error('unexpected <bt> lookup') end} end",
@@ -765,13 +768,13 @@ def test_oddcast_generated_damselfly_and_goblin_profiles_ignore_zone_identity(
     assert "PASS OddCast Damselfly and Goblin global family weaknesses" in completed.stdout
 
 
-def test_oddcast_text_target_settings_bind_selection_and_queued_token(
+def test_oddcast_target_settings_bind_selection_and_queued_token(
     tmp_path: Path,
 ) -> None:
     luajit = shutil.which("luajit")
     assert luajit is not None
     addon_text = ODDCAST_PATH.read_text(encoding="utf-8")
-    assert "require('imgui')" not in addon_text
+    assert "local imgui = require('imgui');" in addon_text
     assert "target = '<t>'" in addon_text
 
     driver = tmp_path / "oddcast_target_settings_contract.lua"
@@ -807,9 +810,11 @@ def test_oddcast_text_target_settings_bind_selection_and_queued_token(
                 "struct={unpack=function(_,data) return data.actorId end}",
                 "package.preload['common']=function() return true end",
                 "package.preload['chat']=function() return {header=function(v) return '['..v..'] ' end,message=function(v) return v end,error=function(v) return v end} end",
+                "package.preload['imgui']=function() return {} end",
                 "package.preload['settings']=function() return {",
                 "  load=function() return activeSettings end,",
                 "  save=function() saveCount=saveCount+1; return saveAllowed end,",
+                "  reload=function() if settingsCallback then settingsCallback(activeSettings) end return true end,",
                 "  register=function(_,_,callback) settingsCallback=callback; return true end,",
                 "} end",
                 "package.loaded['ffi']=nil",
@@ -920,7 +925,7 @@ def test_oddcast_text_target_settings_bind_selection_and_queued_token(
                 "saveAllowed=false",
                 "invoke('/oc','target','<bt>')",
                 "assert(activeSettings.target=='<t>' and saveCount==4,'failed settings save did not roll back')",
-                "print('PASS OddCast text-only target settings and exact token binding')",
+                "print('PASS OddCast target settings and exact token binding')",
             )
         ),
         encoding="utf-8",
@@ -935,7 +940,284 @@ def test_oddcast_text_target_settings_bind_selection_and_queued_token(
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert (
-        "PASS OddCast text-only target settings and exact token binding"
+        "PASS OddCast target settings and exact token binding"
+        in completed.stdout
+    )
+
+
+def test_oddcast_native_settings_gui_is_safe_and_verifies_persistence(
+    tmp_path: Path,
+) -> None:
+    luajit = shutil.which("luajit")
+    assert luajit is not None
+
+    driver = tmp_path / "oddcast_gui_contract.lua"
+    driver.write_text(
+        r"""
+local ODDCAST_PATH = [[__ODDCAST_PATH__]]
+local callbacks, output, queued = {}, {}, {}
+local settingsCallback = nil
+local activeSettings = { target='<t>' }
+local persisted = { target='<t>' }
+local saveCount, reloadCount = 0, 0
+local saveResult, reloadResult, writeThrough = true, true, true
+
+local function copySettings(value)
+    return {
+        target=value.target,
+        dayTierCeiling=value.dayTierCeiling,
+        weaknessTierCeiling=value.weaknessTierCeiling,
+    }
+end
+
+local originalPrint = print
+print = function(value) output[#output + 1] = tostring(value); originalPrint(value) end
+T = function(value) return value end
+struct = { unpack=function() return 0 end }
+addon = { path='fixture/' }
+ImGuiCond_FirstUseEver = 4
+ImGuiWindowFlags_NoCollapse = 32
+
+local ui = {
+    calls=0,
+    beginDepth=0,
+    comboDepth=0,
+    click=nil,
+    openCombo=nil,
+    closeOnBegin=false,
+    failNextBegin=false,
+    failNextText=false,
+}
+local function uiCall() ui.calls = ui.calls + 1 end
+local function assertString(value, name)
+    assert(type(value) == 'string' and value ~= '', name .. ' must be a non-empty string')
+end
+
+local imgui = {}
+imgui.SetNextWindowSize = function(size, condition)
+    uiCall()
+    assert(type(size) == 'table' and type(size[1]) == 'number' and type(size[2]) == 'number', 'window size must be a numeric vector')
+    assert(type(condition) == 'number', 'window condition must be numeric')
+end
+imgui.Begin = function(title, open, flags)
+    uiCall()
+    assertString(title, 'window title')
+    assert(type(open) == 'table' and type(open[1]) == 'boolean', 'window open state must be a boolean ref')
+    assert(type(flags) == 'number', 'window flags must be numeric')
+    assert(ui.beginDepth == 0, 'nested Begin call')
+    if ui.failNextBegin then ui.failNextBegin = false; error('synthetic Begin failure') end
+    ui.beginDepth = 1
+    if ui.closeOnBegin then
+        ui.closeOnBegin = false
+        open[1] = false
+    end
+    return true
+end
+imgui.End = function()
+    uiCall()
+    assert(ui.beginDepth == 1, 'End without Begin')
+    ui.beginDepth = 0
+end
+imgui.Text = function(value)
+    uiCall()
+    assertString(value, 'text')
+    if ui.failNextText then ui.failNextText = false; error('synthetic render failure') end
+end
+imgui.TextWrapped = function(value) uiCall(); assertString(value, 'wrapped text') end
+imgui.Separator = function() uiCall() end
+imgui.Spacing = function() uiCall() end
+imgui.RadioButton = function(label, selected)
+    uiCall()
+    assertString(label, 'radio label')
+    assert(type(selected) == 'boolean', 'radio selected state must be boolean')
+    if ui.click == label then ui.click = nil; return true end
+    return false
+end
+imgui.BeginCombo = function(label, preview)
+    uiCall()
+    assertString(label, 'combo label')
+    assertString(preview, 'combo preview')
+    local opened = ui.openCombo == label
+    if opened then
+        assert(ui.comboDepth == 0, 'nested combo')
+        ui.comboDepth = 1
+    end
+    return opened
+end
+imgui.Selectable = function(label, selected)
+    uiCall()
+    assertString(label, 'selectable label')
+    assert(type(selected) == 'boolean', 'selectable selected state must be boolean')
+    if ui.click == label then ui.click = nil; return true end
+    return false
+end
+imgui.EndCombo = function()
+    uiCall()
+    assert(ui.comboDepth == 1, 'EndCombo without BeginCombo')
+    ui.comboDepth = 0
+end
+imgui.Button = function(label)
+    uiCall()
+    assertString(label, 'button label')
+    if ui.click == label then ui.click = nil; return true end
+    return false
+end
+
+package.preload['common'] = function() return true end
+package.preload['imgui'] = function() return imgui end
+package.preload['chat'] = function()
+    return { header=function(v) return '['..v..'] ' end, message=function(v) return v end, error=function(v) return v end }
+end
+package.loaded['ffi'] = nil
+package.preload['ffi'] = function() return { cdef=function() end, cast=function() error('unexpected cast') end } end
+package.preload['settings'] = function()
+    return {
+        load=function(defaults)
+            for key, value in pairs(defaults) do
+                if activeSettings[key] == nil then activeSettings[key] = value end
+            end
+            persisted = copySettings(activeSettings)
+            return activeSettings
+        end,
+        save=function()
+            saveCount = saveCount + 1
+            if saveResult == 'error' then error('synthetic save failure') end
+            if saveResult ~= true then return false end
+            if writeThrough then persisted = copySettings(activeSettings) end
+            return true
+        end,
+        reload=function()
+            reloadCount = reloadCount + 1
+            if reloadResult ~= true then return false end
+            activeSettings = copySettings(persisted)
+            settingsCallback(activeSettings)
+            return true
+        end,
+        register=function(_, _, callback) settingsCallback = callback; return true end,
+    }
+end
+
+ashita = {
+    events={ register=function(name, _, callback) callbacks[name] = callback end },
+    memory={ find=function() return 0 end, read_uint32=function() return 0 end },
+    bits={ unpack_be=function() return 0 end },
+}
+
+dofile(ODDCAST_PATH)
+assert(activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5, 'legacy settings did not gain GUI defaults')
+assert(callbacks.command ~= nil and callbacks.d3d_present ~= nil, 'GUI callbacks were not registered')
+
+local function invoke(...)
+    local values = {...}
+    local event = { command={args=function() return values end}, blocked=false }
+    callbacks.command(event)
+    assert(event.blocked == true, 'OddCast command was not consumed')
+end
+local function outputHas(needle)
+    for _, line in ipairs(output) do if string.find(line, needle, 1, true) then return true end end
+    return false
+end
+
+callbacks.d3d_present()
+assert(ui.calls == 0, 'closed GUI made ImGui calls')
+invoke('/oc', 'settings')
+callbacks.d3d_present()
+assert(ui.beginDepth == 0 and ui.comboDepth == 0, 'initial GUI stacks were not balanced')
+assert(saveCount == 0 and reloadCount == 0, 'opening settings wrote configuration')
+
+ui.click = '<bt> - current battle target'
+callbacks.d3d_present()
+assert(activeSettings.target == '<bt>' and activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5, 'target radio changed the wrong setting')
+assert(saveCount == 1 and reloadCount == 1, 'target radio was not saved and read back exactly once')
+ui.click = '<bt> - current battle target'
+callbacks.d3d_present()
+assert(saveCount == 1 and reloadCount == 1, 'selecting the active target caused a needless write')
+
+ui.openCombo, ui.click = 'Day spell ceiling', 'III (3)##oddcast_day_3'
+callbacks.d3d_present()
+ui.openCombo = nil
+assert(activeSettings.dayTierCeiling == 3 and activeSettings.weaknessTierCeiling == 5, 'day combo changed the wrong ceiling')
+assert(saveCount == 2 and reloadCount == 2, 'day combo was not saved and read back exactly once')
+
+ui.openCombo, ui.click = 'Weakness / fallback ceiling', 'II (2)##oddcast_weak_2'
+callbacks.d3d_present()
+ui.openCombo = nil
+assert(activeSettings.dayTierCeiling == 3 and activeSettings.weaknessTierCeiling == 2, 'weakness combo changed the wrong ceiling')
+assert(saveCount == 3 and reloadCount == 3, 'weakness combo was not saved and read back exactly once')
+
+ui.click = 'Reset defaults'
+callbacks.d3d_present()
+assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5, 'reset defaults was incomplete')
+assert(saveCount == 4 and reloadCount == 4, 'reset defaults was not one verified write')
+
+saveResult = false
+ui.click = '<bt> - current battle target'
+callbacks.d3d_present()
+assert(activeSettings.target == '<t>' and saveCount == 5 and reloadCount == 4, 'failed save did not roll back without reload')
+saveResult = true
+
+writeThrough = false
+ui.openCombo, ui.click = 'Day spell ceiling', 'III (3)##oddcast_day_3'
+callbacks.d3d_present()
+ui.openCombo, writeThrough = nil, true
+assert(activeSettings.dayTierCeiling == 5 and saveCount == 6 and reloadCount == 5, 'read-back mismatch did not restore persisted state')
+assert(outputHas('could not save and verify'), 'persistence failure was not explained')
+
+activeSettings = { target='<invalid>', dayTierCeiling=0, weaknessTierCeiling='bad' }
+settingsCallback(activeSettings)
+callbacks.d3d_present()
+assert(ui.beginDepth == 0 and ui.comboDepth == 0, 'corrupt settings broke GUI rendering')
+ui.click = '<t> - current target'
+callbacks.d3d_present()
+ui.openCombo, ui.click = 'Day spell ceiling', 'IV (4)##oddcast_day_4'
+callbacks.d3d_present()
+ui.openCombo = nil
+ui.openCombo, ui.click = 'Weakness / fallback ceiling', 'I (1)##oddcast_weak_1'
+callbacks.d3d_present()
+ui.openCombo = nil
+assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 4 and activeSettings.weaknessTierCeiling == 1, 'GUI could not repair corrupt settings')
+
+ui.closeOnBegin = true
+callbacks.d3d_present()
+local closedCallCount = ui.calls
+callbacks.d3d_present()
+assert(ui.calls == closedCallCount, 'X-closed GUI continued rendering')
+invoke('/oc', 'settings')
+callbacks.d3d_present()
+assert(ui.calls > closedCallCount, 'settings command did not reopen the GUI')
+
+ui.failNextText = true
+callbacks.d3d_present()
+assert(ui.beginDepth == 0 and ui.comboDepth == 0, 'render failure leaked an ImGui stack')
+assert(outputHas('Settings window closed after a rendering error.'), 'render failure was not isolated and explained')
+local failedCallCount = ui.calls
+callbacks.d3d_present()
+assert(ui.calls == failedCallCount, 'failed GUI did not close itself')
+invoke('/oc', 'settings')
+ui.failNextBegin = true
+callbacks.d3d_present()
+assert(ui.beginDepth == 0, 'Begin failure incorrectly called End')
+assert(outputHas('Settings window closed after a rendering error.'), 'Begin failure was not isolated and explained')
+local beginFailedCallCount = ui.calls
+callbacks.d3d_present()
+assert(ui.calls == beginFailedCallCount, 'Begin-failed GUI did not close itself')
+assert(#queued == 0, 'settings GUI queued a cast')
+print('PASS OddCast native settings GUI and verified persistence contract')
+""".replace("__ODDCAST_PATH__", ODDCAST_PATH.as_posix()).lstrip(),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    completed = subprocess.run(
+        [luajit, str(driver)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert (
+        "PASS OddCast native settings GUI and verified persistence contract"
         in completed.stdout
     )
 

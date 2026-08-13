@@ -4,13 +4,14 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '0.2.8';
+addon.version = '1.0.0';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
 local bit = require('bit');
 local chat = require('chat');
 local ffi = require('ffi');
+local imgui = require('imgui');
 local settings = require('settings');
 
 local defaultSettings = T{
@@ -19,6 +20,7 @@ local defaultSettings = T{
     weaknessTierCeiling = 5,
 };
 local activeSettings = settings.load(defaultSettings);
+local settingsWindowOpen = { false };
 settings.register('settings', 'oddcast_settings_cb', function(updatedSettings)
     activeSettings = updatedSettings;
 end);
@@ -976,7 +978,7 @@ end
 local function showHelp()
     message('/oddcast day | /oc day - highest modeled ready spell matching the current Vana day.', false);
     message('/oddcast weakness | /oc weak - typical mob-family weakness, independent of zone.', false);
-    message('/oddcast settings | /oc settings - show current text settings.', false);
+    message('/oddcast settings | /oc settings - open the native settings window and report current values.', false);
     message('/oddcast target [<t>|<bt>] | /oc target [<t>|<bt>] - show or set the hostile target token.', false);
     message('/oddcast tier [day|weak] [1-5|I-V|clear] | /oc tier ... - show, set, or reset tier ceilings.', false);
 end
@@ -1021,26 +1023,79 @@ local function showSettings()
     showTierSettings();
 end
 
+local function persistSettingsChanges(changes)
+    if type(activeSettings) ~= 'table' then
+        return false;
+    end
+
+    for _, change in ipairs(changes) do
+        change.previous = activeSettings[change.key];
+        activeSettings[change.key] = change.value;
+    end
+
+    local saveOk, saved = pcall(settings.save);
+    if not saveOk or saved ~= true then
+        for _, change in ipairs(changes) do
+            activeSettings[change.key] = change.previous;
+        end
+        return false;
+    end
+
+    -- Ashita's public save wrapper does not expose a low-level file-open
+    -- failure. Reload through the supported API and verify the value that was
+    -- actually read back before reporting success.
+    local reloadOk, reloaded = pcall(settings.reload);
+    if not reloadOk or reloaded ~= true then
+        for _, change in ipairs(changes) do
+            activeSettings[change.key] = change.previous;
+        end
+        pcall(settings.save);
+        return false;
+    end
+
+    local matched = type(activeSettings) == 'table';
+    if matched then
+        for _, change in ipairs(changes) do
+            if activeSettings[change.key] ~= change.value then
+                matched = false;
+                break;
+            end
+        end
+    end
+    if matched then
+        return true;
+    end
+
+    -- A mismatched reload is already the disk-backed state in the normal
+    -- failure case. Restore only values that differ from the prior state, then
+    -- make one best-effort reload so the cached table stays disk-backed.
+    local needsRestore = false;
+    if type(activeSettings) == 'table' then
+        for _, change in ipairs(changes) do
+            if activeSettings[change.key] ~= change.previous then
+                activeSettings[change.key] = change.previous;
+                needsRestore = true;
+            end
+        end
+    end
+    if needsRestore then
+        pcall(settings.save);
+        pcall(settings.reload);
+    end
+    return false;
+end
+
 local function setTargetToken(value)
     local token = string.lower(tostring(value or ''));
     if token ~= '<t>' and token ~= '<bt>' then
         message('Unsupported target token. Use /oc target <t> or /oc target <bt>.', true);
         return;
     end
-    if type(activeSettings) ~= 'table' then
-        message('OddCast settings are unavailable; target was not changed.', true);
+    if not persistSettingsChanges({ { key='target', value=token } }) then
+        message('Ashita could not save and verify the OddCast settings change.', true);
         return;
     end
-
-    local previous = activeSettings.target;
-    activeSettings.target = token;
-    local ok, saved = pcall(settings.save);
-    if not ok or saved ~= true then
-        activeSettings.target = previous;
-        message('Ashita could not save the OddCast target setting.', true);
-        return;
-    end
-    message(string.format('Target token set: %s', token), false);
+    message(string.format('Target token updated: %s', token), false);
 end
 
 local function setTierCeiling(action, value)
@@ -1049,22 +1104,115 @@ local function setTierCeiling(action, value)
         message('Unsupported tier ceiling. Use 1-5, I-V, or clear.', true);
         return;
     end
-    if type(activeSettings) ~= 'table' then
-        message('OddCast settings are unavailable; the tier ceiling was not changed.', true);
-        return;
-    end
-
     local key = action == 'day' and 'dayTierCeiling' or 'weaknessTierCeiling';
-    local previous = activeSettings[key];
-    activeSettings[key] = ceiling;
-    local ok, saved = pcall(settings.save);
-    if not ok or saved ~= true then
-        activeSettings[key] = previous;
-        message('Ashita could not save the OddCast tier ceiling.', true);
+    if not persistSettingsChanges({ { key=key, value=ceiling } }) then
+        message('Ashita could not save and verify the OddCast settings change.', true);
         return;
     end
     local label = action == 'day' and 'Day' or 'Weakness';
-    message(string.format('%s tier ceiling set: %s (%d)', label, tierRoman[ceiling], ceiling), false);
+    message(string.format('%s tier ceiling updated: %s (%d)', label, tierRoman[ceiling], ceiling), false);
+end
+
+local function resetSettings()
+    if type(activeSettings) == 'table'
+        and activeSettings.target == defaultSettings.target
+        and activeSettings.dayTierCeiling == defaultSettings.dayTierCeiling
+        and activeSettings.weaknessTierCeiling == defaultSettings.weaknessTierCeiling
+    then
+        message('OddCast settings already use the defaults.', false);
+        return;
+    end
+
+    if not persistSettingsChanges({
+        { key='target', value=defaultSettings.target },
+        { key='dayTierCeiling', value=defaultSettings.dayTierCeiling },
+        { key='weaknessTierCeiling', value=defaultSettings.weaknessTierCeiling },
+    }) then
+        message('Ashita could not save and verify the OddCast settings reset.', true);
+        return;
+    end
+    message('OddCast settings reset to defaults.', false);
+end
+
+local function renderTierCombo(label, action)
+    local current = configuredTierCeiling(action);
+    local preview = current and string.format('%s (%d)', tierRoman[current], current)
+        or 'Invalid - choose a tier';
+    local comboOpen = false;
+    local renderOk, renderError = pcall(function()
+        comboOpen = imgui.BeginCombo(label, preview);
+        if not comboOpen then
+            return;
+        end
+        for tier = 1, 5 do
+            local visibleLabel = string.format('%s (%d)', tierRoman[tier], tier);
+            local itemLabel = string.format('%s##oddcast_%s_%d', visibleLabel, action, tier);
+            if imgui.Selectable(itemLabel, current == tier) and current ~= tier then
+                setTierCeiling(action, tostring(tier));
+            end
+        end
+    end);
+    if comboOpen then
+        local closeOk, closeError = pcall(imgui.EndCombo);
+        if renderOk and not closeOk then
+            renderOk = false;
+            renderError = closeError;
+        end
+    end
+    if not renderOk then
+        error(renderError);
+    end
+end
+
+local function renderSettingsWindow()
+    if settingsWindowOpen[1] ~= true then
+        return;
+    end
+
+    local beginCalled = false;
+    local renderOk, renderError = pcall(function()
+        imgui.SetNextWindowSize({ 380, 270 }, ImGuiCond_FirstUseEver);
+        local visible = imgui.Begin('OddCast Settings', settingsWindowOpen, ImGuiWindowFlags_NoCollapse);
+        beginCalled = true;
+        if not visible then
+            return;
+        end
+
+        imgui.Text('Target');
+        imgui.Separator();
+        local target = configuredTargetToken();
+        if target == nil then
+            imgui.TextWrapped('The current target setting is invalid. Choose a safe target below to repair it.');
+        end
+        if imgui.RadioButton('<t> - current target', target == '<t>') and target ~= '<t>' then
+            setTargetToken('<t>');
+        end
+        if imgui.RadioButton('<bt> - current battle target', target == '<bt>') and target ~= '<bt>' then
+            setTargetToken('<bt>');
+        end
+
+        imgui.Spacing();
+        imgui.Text('Spell tier ceilings');
+        imgui.Separator();
+        renderTierCombo('Day spell ceiling', 'day');
+        renderTierCombo('Weakness / fallback ceiling', 'weak');
+        imgui.TextWrapped('Each mode is capped independently. OddCast still chooses the strongest ready eligible spell at or below that tier.');
+
+        imgui.Spacing();
+        if imgui.Button('Reset defaults') then
+            resetSettings();
+        end
+    end);
+
+    local closeOk = true;
+    if beginCalled then
+        closeOk = pcall(imgui.End);
+    end
+    if not renderOk or not closeOk then
+        settingsWindowOpen[1] = false;
+        message('Settings window closed after a rendering error.', true);
+        return;
+    end
 end
 
 ashita.events.register('command', 'oddcast_command_cb', function(e)
@@ -1118,6 +1266,7 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
         return;
     end
     if action == 'settings' then
+        settingsWindowOpen[1] = true;
         showSettings();
         return;
     end
@@ -1154,9 +1303,11 @@ end);
 
 ashita.events.register('d3d_present', 'oddcast_pending_cast_cb', function()
     processPendingRequest();
+    renderSettingsWindow();
 end);
 
 ashita.events.register('unload', 'oddcast_unload_cb', function()
+    settingsWindowOpen[1] = false;
     cancelPendingRequest(nil);
 end);
 

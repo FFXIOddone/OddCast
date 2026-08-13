@@ -1,17 +1,19 @@
 # OddCast
 
 OddCast is a small Ashita v4 addon for explicit, one-command elemental spell
-selection. It is text-command only: there is no GUI, no automatic casting
-rotation, and no packet injection.
+selection. It includes a native settings window, while casting remains fully
+manual: there is no automatic rotation and no packet injection.
 
 ## Requirements
 
 - Ashita v4
 - a supported FFXI client build with the validated Vana'diel-time layout
 
-Copy this complete directory to `Ashita\addons\oddcast`. The installed copy
-must include `oddcast.lua`, `weakness_data.lua`, `THIRD_PARTY_NOTICES.md`, and
-`LICENSE-LUASHITACAST-MIT` and `LICENSE-ODDCAST-GPL-3.0`. Then run:
+Extract the release ZIP's complete `oddcast` directory to
+`Ashita\addons\oddcast`. It must contain exactly `oddcast.lua`,
+`weakness_data.lua`, `weakness_data_manifest.json`, `README.md`,
+`THIRD_PARTY_NOTICES.md`, `LICENSE-LUASHITACAST-MIT`, and
+`LICENSE-ODDCAST-GPL-3.0`. Then run:
 
 ```text
 /addon load oddcast
@@ -33,6 +35,15 @@ must include `oddcast.lua`, `weakness_data.lua`, `THIRD_PARTY_NOTICES.md`, and
 /oc tier weak <1-5|I-V|clear>
 /oc help
 ```
+
+`settings` opens OddCast's native Ashita settings window and also prints the
+current values in chat. The window controls `<t>` versus `<bt>`, the independent
+Day and Weakness/fallback tier ceilings, and a one-click reset to safe defaults.
+Changes apply immediately only after OddCast saves, reloads, and verifies the
+value through Ashita's settings API. A failed read-back reports an error and
+restores the prior value when Ashita's persistence API remains available.
+Close the window with its normal X; all text commands remain available as a
+fallback.
 
 `day` reads the client's current Vana'diel day and queues the highest modeled
 ready single-target spell of that element. For the six standard tier lines,

@@ -1,18 +1,21 @@
 # OddCast
 
 OddCast is a small Ashita v4 addon for explicit, one-command elemental spell
-selection. It is text-command only: there is no GUI, no automatic casting
-rotation, and no packet injection.
+selection. It includes a native settings window, while casting remains fully
+manual: there is no automatic rotation and no packet injection.
 
 ## Requirements
 
 - Ashita v4
 - a supported FFXI client build with the validated Vana'diel-time layout
 
-Copy the complete `addons\oddcast` directory to `Ashita\addons\oddcast`. The
-installed copy must include `oddcast.lua`, `weakness_data.lua`,
-`THIRD_PARTY_NOTICES.md`, `LICENSE-LUASHITACAST-MIT`, and
-`LICENSE-ODDCAST-GPL-3.0`. Then run:
+For a packaged release, verify `OddCast-v1.0.0.zip` against `SHA256SUMS.txt`,
+then extract its `oddcast` directory into `Ashita\addons`. For a source install,
+copy the complete `addons\oddcast` directory to `Ashita\addons\oddcast`.
+
+The installed directory must contain exactly `oddcast.lua`, `weakness_data.lua`,
+`weakness_data_manifest.json`, `README.md`, `THIRD_PARTY_NOTICES.md`,
+`LICENSE-LUASHITACAST-MIT`, and `LICENSE-ODDCAST-GPL-3.0`. Then run:
 
 ```text
 /addon load oddcast
@@ -34,6 +37,15 @@ installed copy must include `oddcast.lua`, `weakness_data.lua`,
 /oc tier weak <1-5|I-V|clear>
 /oc help
 ```
+
+`settings` opens OddCast's native Ashita settings window and also prints the
+current values in chat. The window controls `<t>` versus `<bt>`, the independent
+Day and Weakness/fallback tier ceilings, and a one-click reset to safe defaults.
+Changes apply immediately only after OddCast saves, reloads, and verifies the
+value through Ashita's settings API. A failed read-back reports an error and
+restores the prior value when Ashita's persistence API remains available.
+Close the window with its normal X; all text commands remain available as a
+fallback.
 
 `day` reads the client's current Vana'diel day and queues the highest modeled
 ready single-target spell of that element. For the six standard tier lines,
@@ -137,6 +149,18 @@ python -m pytest tests -q -p no:cacheprovider
 python tools/build_weakness_data.py --validate-output --luajit <path-to-luajit>
 luajit -b addons/oddcast/oddcast.lua oddcast.luac
 ```
+
+A clean-worktree release is built and then reproduced byte-for-byte with:
+
+```text
+python tools/build_release.py --expect-version 1.0.0 --output build/release/v1.0.0
+python tools/build_release.py --expect-version 1.0.0 --output build/release/v1.0.0 --check
+```
+
+The builder uses a fixed seven-file allowlist and produces the ZIP,
+`MANIFEST.json`, and `SHA256SUMS.txt`. `--allow-dirty` exists only for local
+development tests and records that state in the manifest; do not distribute
+such an artifact as an official release.
 
 The optional CatsEye source-parity test is skipped when a sibling CatsEye
 server checkout is unavailable. Set `CATSEYE_SERVER_ROOT` to run that check
