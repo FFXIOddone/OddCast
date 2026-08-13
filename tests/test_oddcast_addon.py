@@ -56,7 +56,7 @@ def test_luashitacast_vana_time_adaptation_has_complete_attribution() -> None:
     provenance_index = addon_text.index(provenance)
     signature_index = addon_text.index("local VANA_TIME_SIGNATURE")
     assert 0 < signature_index - provenance_index < 300
-    assert "addon.version = '0.2.5';" in addon_text
+    assert "addon.version = '0.2.6';" in addon_text
 
     for text in readme_texts + notice_texts:
         assert "https://github.com/ThornyFFXI/LuAshitacast" in text
@@ -267,7 +267,7 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "            return 0",
                 "        end,",
                 "    },",
-                "    bits = { unpack_be=function(data, base, offset, length) if base == 10 and offset == 2 and length == 4 then return data.category end if base == 10 and offset == 6 and length == 16 then return data.spellId end error('unexpected packet bit field') end },",
+                "    bits = { unpack_be=function(data, base, offset, length) if base == 10 and offset == 2 and length == 4 then return data.category end if base == 10 and offset == 6 and length == 16 then return data.topLevelParam end if base == 0 and offset == 213 and length == 17 then return data.spellId end error('unexpected packet bit field') end },",
                 "}",
                 "local target = { GetIsSubTargetActive=function() return 0 end, GetTargetIndex=function() return targetIndex end }",
                 "local entity = { GetSpawnFlags=function() return 0x10 end, GetName=function() return targetName end, GetServerId=function() return targetServerId end }",
@@ -302,7 +302,7 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "    assert(event.blocked == true, 'OddCast command was not blocked')",
                 "end",
                 "local function confirm(spellId)",
-                "    callbacks.packet_in({id=0x028, data={actorId=playerServerId}, data_raw={category=8,spellId=spellId}})",
+                "    callbacks.packet_in({id=0x028, data={actorId=playerServerId}, data_raw={category=8,topLevelParam=0x6163,spellId=spellId}})",
                 "end",
                 "callbacks.load()",
                 "invoke('/oc', 'day')",
@@ -312,6 +312,9 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "assert(queued[1].mode == 1, 'day did not use the typed command queue')",
                 "assert(queued[1].command == '/ma \"Water IV\" <t>', 'day did not choose highest ready Watersday tier')",
                 "confirm(172)",
+                "local sawConfirmedStart = false",
+                "for _, line in ipairs(output) do if string.find(line, 'Confirmed cast start: Water IV.', 1, true) then sawConfirmedStart=true end end",
+                "assert(sawConfirmedStart, 'category-8 action spell identity was read from the wrong packet field')",
                 "rawTime = 0",
                 "invoke('/oc', 'day')",
                 "assert(#queued == 1, 'zero Vana time cast instead of failing closed')",
@@ -512,7 +515,7 @@ def test_oddcast_global_mob_weakness_selection_contract(tmp_path: Path) -> None:
                 "ashita = {",
                 "    events = { register=function(name, _, cb) callbacks[name]=cb end },",
                 "    memory = { find=function() return 0 end, read_uint32=function() return 0 end },",
-                "    bits = { unpack_be=function(data, base, offset, length) if base == 10 and offset == 2 and length == 4 then return data.category end if base == 10 and offset == 6 and length == 16 then return data.spellId end error('unexpected packet bit field') end },",
+                "    bits = { unpack_be=function(data, base, offset, length) if base == 10 and offset == 2 and length == 4 then return data.category end if base == 0 and offset == 213 and length == 17 then return data.spellId end error('unexpected packet bit field') end },",
                 "}",
                 "local target = { GetIsSubTargetActive=function() return 0 end, GetTargetIndex=function() return targetIndex end }",
                 "local entity = {",
@@ -672,7 +675,7 @@ def test_oddcast_generated_damselfly_and_goblin_profiles_ignore_zone_identity(
                 "package.preload['ffi'] = function() return {cdef=function() end,cast=function() error('unexpected <bt> lookup') end} end",
                 "package.preload['chat'] = function() return { header=function(v) return '['..v..'] ' end, message=function(v) return v end, error=function(v) return v end } end",
                 "addon = { path=[[" + ODDCAST_DIR.as_posix() + "/]] }",
-                "ashita = { events={register=function(name, _, cb) callbacks[name]=cb end}, memory={find=function() return 0 end, read_uint32=function() return 0 end}, bits={unpack_be=function(data,base,offset,length) if base==10 and offset==2 and length==4 then return data.category end if base==10 and offset==6 and length==16 then return data.spellId end error('unexpected packet bit field') end} }",
+                "ashita = { events={register=function(name, _, cb) callbacks[name]=cb end}, memory={find=function() return 0 end, read_uint32=function() return 0 end}, bits={unpack_be=function(data,base,offset,length) if base==10 and offset==2 and length==4 then return data.category end if base==0 and offset==213 and length==17 then return data.spellId end error('unexpected packet bit field') end} }",
                 "local resources = {}",
                 "-- Deliberately synthetic identities prove weakness is keyed by the global mob name, not a zone spawn row.",
                 "local liveName, liveServerId, liveZone = 'Damselfly', 17227777, 119",
@@ -774,7 +777,7 @@ def test_oddcast_text_target_settings_bind_selection_and_queued_token(
                 "ashita={events={register=function(name,_,callback) callbacks[name]=callback end},memory={",
                 "  find=function(_,_,signature) if string.sub(signature,1,4)=='66A1' then return btSignatureAddress end return 1000 end,",
                 "  read_uint32=function(address) if address==1052 then return 2000 end if address==2012 then return rawTime end return 0 end,",
-                "},bits={unpack_be=function(data,base,offset,length) if base==10 and offset==2 and length==4 then return data.category end if base==10 and offset==6 and length==16 then return data.spellId end error('unexpected packet bit field') end}}",
+                "},bits={unpack_be=function(data,base,offset,length) if base==10 and offset==2 and length==4 then return data.category end if base==0 and offset==213 and length==17 then return data.spellId end error('unexpected packet bit field') end}}",
                 "local target={GetIsSubTargetActive=function() return subTargetActive end,GetTargetIndex=function() return mainIndex end}",
                 "local entity={",
                 "  GetSpawnFlags=function(_,index) if index==mainIndex or index==btIndex then return 0x10 end return 0 end,",

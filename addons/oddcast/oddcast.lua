@@ -4,7 +4,7 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '0.2.5';
+addon.version = '0.2.6';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
@@ -859,9 +859,10 @@ local function confirmPendingCastStart(e)
     if category ~= 8 then
         return;
     end
-    -- Category 8 stores the spell command argument in the top-level 16-bit Param field.
+    -- Category 8 identifies the spell in the first target action's 17-bit
+    -- param field. The top-level param is a cast marker, not the spell ID.
     local spellId = tonumber(safe(nil, function()
-        return ashita.bits.unpack_be(e.data_raw, 10, 6, 16);
+        return ashita.bits.unpack_be(e.data_raw, 0, 213, 17);
     end));
     if spellId ~= pending.spellId then
         return;
