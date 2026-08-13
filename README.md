@@ -29,6 +29,9 @@ installed copy must include `oddcast.lua`, `weakness_data.lua`,
 /oc target
 /oc target <t>
 /oc target <bt>
+/oc tier
+/oc tier day <1-5|I-V|clear>
+/oc tier weak <1-5|I-V|clear>
 /oc help
 ```
 
@@ -53,9 +56,20 @@ Ready means all of the following are true: the spell is learned, the current
 main or subjob can use it at its current level, current MP covers its cost, and
 its recast is zero.
 
+`tier` controls independent ceilings for `day` and `weak`. Both default to V.
+For example, `/oc tier day III` limits only day selection to tiers I-III, while
+`/oc tier weak 4` limits recognized weaknesses and the unknown-target fallback
+to tiers I-IV. Arabic `1`-`5` and Roman `I`-`V` inputs are accepted
+case-insensitively. `/oc tier`, `/oc tier day`, `/oc tier weak`, and
+`/oc settings` report the persisted values. Use `clear` in place of a tier to
+restore that mode's default ceiling of V.
+
 If the player is already casting, OddCast keeps exactly one pending request for
 up to 15 seconds instead of sending a command that FFXI will reject as busy. It
-waits for the cast bar to clear plus a 0.5-second post-cast settle, rechecks the
+briefly checks that an initially positive cast-bar count is actually moving, so
+the frozen count left by an interrupted cast is recognized as stale idle within
+0.10 seconds. A genuinely moving cast retains the full behavior: OddCast waits
+for the cast bar to clear plus a 3.1-second post-cast settle, rechecks the
 same target identity, recalculates the highest ready spell, and submits a normal
 `/ma` command. OddCast retains the request until the player's incoming action
 packet confirms that exact spell started; an unconfirmed submission is retried

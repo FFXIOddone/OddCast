@@ -4,7 +4,7 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '0.2.7';
+addon.version = '0.2.8';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
@@ -15,6 +15,8 @@ local settings = require('settings');
 
 local defaultSettings = T{
     target = '<t>',
+    dayTierCeiling = 5,
+    weaknessTierCeiling = 5,
 };
 local activeSettings = settings.load(defaultSettings);
 settings.register('settings', 'oddcast_settings_cb', function(updatedSettings)
@@ -49,7 +51,8 @@ local WEAKNESS_INDEX_FILE = 'weakness_data.lua';
 local weaknessIndex = nil;
 
 local PENDING_REQUEST_TTL_SECONDS = 15.0;
-local POST_CAST_LOCK_SECONDS = 0.5;
+local POST_CAST_LOCK_SECONDS = 3.1;
+local CAST_COUNT_STALE_SECONDS = 0.10;
 local START_ACK_SECONDS = 2.0;
 local RETRY_LOCK_SECONDS = 1.1;
 local MAX_SUBMISSIONS = 4;
@@ -120,6 +123,15 @@ local vanaTimeAddress = nil;
 local battleTargetAddress = nil;
 
 local weaknessElements = { 'Fire', 'Ice', 'Wind', 'Earth', 'Lightning', 'Water' };
+local tierRoman = { 'I', 'II', 'III', 'IV', 'V' };
+local tierInputs = {
+    ['1'] = 1, ['i'] = 1,
+    ['2'] = 2, ['ii'] = 2,
+    ['3'] = 3, ['iii'] = 3,
+    ['4'] = 4, ['iv'] = 4,
+    ['5'] = 5, ['v'] = 5,
+    ['clear'] = 5,
+};
 
 local function safe(defaultValue, callback)
     local ok, value = pcall(callback);
@@ -264,6 +276,19 @@ local function configuredTargetToken()
     return nil, 'OddCast target setting is invalid. Use /oc target <t> or /oc target <bt>.';
 end
 
+local function configuredTierCeiling(action)
+    local key = action == 'day' and 'dayTierCeiling' or 'weaknessTierCeiling';
+    local value = activeSettings and activeSettings[key] or nil;
+    if isInteger(value) and value >= 1 and value <= 5 then
+        return value, nil;
+    end
+    return nil, string.format(
+        'OddCast %s tier ceiling setting is invalid. Use /oc tier %s 1-5 or I-V.',
+        action == 'day' and 'day' or 'weakness',
+        action == 'day' and 'day' or 'weak'
+    );
+end
+
 local function battleTargetIndex()
     if battleTargetAddress == nil or battleTargetAddress <= 0 then
         local found = tonumber(safe(0, function()
@@ -396,7 +421,7 @@ local function castBarState(memory)
     if count == nil then
         return nil, 'Ashita cast-bar state is unavailable; no spell was queued.';
     end
-    return count > 0, nil;
+    return count > 0, nil, count;
 end
 
 local function currentDay()
@@ -454,7 +479,7 @@ local function activeJobCanUse(resource, player)
     return false;
 end
 
-local function readySpells(memory)
+local function readySpells(memory, tierCeiling)
     local resources = safe(nil, function() return AshitaCore:GetResourceManager(); end);
     local player = safe(nil, function() return memory:GetPlayer(); end);
     local party = safe(nil, function() return memory:GetParty(); end);
@@ -483,6 +508,8 @@ local function readySpells(memory)
             and manaCost <= mp
             and timer ~= nil
             and timer == 0
+            and isPositiveInteger(spell.tier)
+            and spell.tier <= tierCeiling
         then
             output[#output + 1] = spell;
         end
@@ -547,7 +574,13 @@ local function chooseDay(target)
         return false;
     end
 
-    local ready, readyError = readySpells(target.memory);
+    local tierCeiling, tierError = configuredTierCeiling('day');
+    if tierCeiling == nil then
+        message(tierError, true);
+        return false;
+    end
+
+    local ready, readyError = readySpells(target.memory, tierCeiling);
     if ready == nil then
         message(readyError, true);
         return false;
@@ -623,7 +656,13 @@ local function chooseWeakness(target)
         return false;
     end
 
-    local ready, readyError = readySpells(target.memory);
+    local tierCeiling, tierError = configuredTierCeiling('weak');
+    if tierCeiling == nil then
+        message(tierError, true);
+        return false;
+    end
+
+    local ready, readyError = readySpells(target.memory, tierCeiling);
     if ready == nil then
         message(readyError, true);
         return false;
@@ -746,10 +785,51 @@ local function processPendingRequest()
         return;
     end
 
-    local busy, castBarError = castBarState(actualTarget.memory);
+    local busy, castBarError, castCount = castBarState(actualTarget.memory);
     if busy == nil then
         cancelPendingRequest(castBarError);
         return;
+    end
+    if pending.staleCastCount ~= nil then
+        if busy and math.abs(castCount - pending.staleCastCount) < 0.001 then
+            busy = false;
+        else
+            pending.staleCastCount = nil;
+            if busy and not pending.awaitingStart then
+                pending.castProbeCount = castCount;
+                pending.castProbeUnchangedSince = now;
+                pending.castProbeSawProgress = true;
+                pending.notBefore = math.max(pending.notBefore, now + POST_CAST_LOCK_SECONDS);
+                return;
+            end
+        end
+    end
+    if not pending.awaitingStart and pending.castProbeCount ~= nil then
+        if not busy then
+            pending.castProbeCount = nil;
+            pending.castProbeUnchangedSince = nil;
+            pending.castProbeSawProgress = nil;
+            pending.notBefore = math.max(pending.notBefore, now + POST_CAST_LOCK_SECONDS);
+        elseif math.abs(castCount - pending.castProbeCount) >= 0.001 then
+            pending.castProbeCount = castCount;
+            pending.castProbeUnchangedSince = now;
+            pending.castProbeSawProgress = true;
+            pending.notBefore = math.max(pending.notBefore, now + POST_CAST_LOCK_SECONDS);
+            return;
+        elseif now - pending.castProbeUnchangedSince < CAST_COUNT_STALE_SECONDS then
+            return;
+        else
+            local sawProgress = pending.castProbeSawProgress == true;
+            pending.castProbeCount = nil;
+            pending.castProbeUnchangedSince = nil;
+            pending.castProbeSawProgress = nil;
+            pending.staleCastCount = castCount;
+            if sawProgress then
+                pending.notBefore = math.max(pending.notBefore, now + POST_CAST_LOCK_SECONDS);
+            end
+            busy = false;
+            message('Cast-bar count is not progressing; treating casting as ended.', false);
+        end
     end
     if busy then
         pending.notBefore = math.max(pending.notBefore, now + POST_CAST_LOCK_SECONDS);
@@ -791,7 +871,7 @@ local function processPendingRequest()
 end
 
 local function requestAction(action, target)
-    local busy, castBarError = castBarState(target.memory);
+    local busy, castBarError, castCount = castBarState(target.memory);
     if busy == nil then
         cancelPendingRequest(castBarError);
         return;
@@ -803,6 +883,15 @@ local function requestAction(action, target)
     local inheritedNotBefore = previous and previous.notBefore or now;
     local inheritedAwaitingStart = previous and previous.awaitingStart or false;
     local inheritedSawCastBar = previous and previous.sawCastBar or false;
+    local castProbeCount = previous and previous.castProbeCount or nil;
+    local castProbeUnchangedSince = previous and previous.castProbeUnchangedSince or nil;
+    local castProbeSawProgress = previous and previous.castProbeSawProgress or nil;
+    local staleCastCount = previous and previous.staleCastCount or nil;
+    if not inheritedAwaitingStart and busy and castProbeCount == nil and staleCastCount == nil then
+        castProbeCount = castCount;
+        castProbeUnchangedSince = now;
+        castProbeSawProgress = false;
+    end
     if inheritedAwaitingStart and busy then
         inheritedSawCastBar = true;
     end
@@ -816,17 +905,28 @@ local function requestAction(action, target)
             token = target.token,
         },
         expiresAt = now + PENDING_REQUEST_TTL_SECONDS,
-        notBefore = math.max(inheritedNotBefore, busy and (now + POST_CAST_LOCK_SECONDS) or now),
+        notBefore = math.max(
+            inheritedNotBefore,
+            busy and castProbeCount == nil and (now + POST_CAST_LOCK_SECONDS) or now
+        ),
         attempts = previous and previous.attempts or 0,
         awaitingStart = inheritedAwaitingStart,
         spellId = inheritedAwaitingStart and previous.spellId or nil,
         spellName = inheritedAwaitingStart and previous.spellName or nil,
         ackDeadline = inheritedAwaitingStart and previous.ackDeadline or nil,
         sawCastBar = inheritedSawCastBar,
+        castProbeCount = castProbeCount,
+        castProbeUnchangedSince = castProbeUnchangedSince,
+        castProbeSawProgress = castProbeSawProgress,
+        staleCastCount = staleCastCount,
     };
     lastPresentAt = nil;
 
-    if busy or now < pendingRequest.notBefore or pendingRequest.awaitingStart then
+    if busy
+        or pendingRequest.castProbeCount ~= nil
+        or now < pendingRequest.notBefore
+        or pendingRequest.awaitingStart
+    then
         local label = action == 'weak' and 'Weakness' or 'Day';
         local prefix = replaced and 'Replaced the pending request. ' or '';
         message(string.format('%s%s request queued; waiting for the current submission or action lock.', prefix, label), false);
@@ -878,15 +978,47 @@ local function showHelp()
     message('/oddcast weakness | /oc weak - typical mob-family weakness, independent of zone.', false);
     message('/oddcast settings | /oc settings - show current text settings.', false);
     message('/oddcast target [<t>|<bt>] | /oc target [<t>|<bt>] - show or set the hostile target token.', false);
+    message('/oddcast tier [day|weak] [1-5|I-V|clear] | /oc tier ... - show, set, or reset tier ceilings.', false);
 end
 
-local function showSettings()
+local function showTargetSetting()
     local token, tokenError = configuredTargetToken();
     if token == nil then
         message(tokenError, true);
         return;
     end
     message(string.format('Target token: %s', token), false);
+end
+
+local function tierAction(value)
+    local action = string.lower(tostring(value or ''));
+    if action == 'weakness' then
+        return 'weak';
+    end
+    if action == 'day' or action == 'weak' then
+        return action;
+    end
+    return nil;
+end
+
+local function showTierSetting(action)
+    local ceiling, ceilingError = configuredTierCeiling(action);
+    if ceiling == nil then
+        message(ceilingError, true);
+        return;
+    end
+    local label = action == 'day' and 'Day' or 'Weakness';
+    message(string.format('%s tier ceiling: %s (%d)', label, tierRoman[ceiling], ceiling), false);
+end
+
+local function showTierSettings()
+    showTierSetting('day');
+    showTierSetting('weak');
+end
+
+local function showSettings()
+    showTargetSetting();
+    showTierSettings();
 end
 
 local function setTargetToken(value)
@@ -911,6 +1043,30 @@ local function setTargetToken(value)
     message(string.format('Target token set: %s', token), false);
 end
 
+local function setTierCeiling(action, value)
+    local ceiling = tierInputs[string.lower(tostring(value or ''))];
+    if ceiling == nil then
+        message('Unsupported tier ceiling. Use 1-5, I-V, or clear.', true);
+        return;
+    end
+    if type(activeSettings) ~= 'table' then
+        message('OddCast settings are unavailable; the tier ceiling was not changed.', true);
+        return;
+    end
+
+    local key = action == 'day' and 'dayTierCeiling' or 'weaknessTierCeiling';
+    local previous = activeSettings[key];
+    activeSettings[key] = ceiling;
+    local ok, saved = pcall(settings.save);
+    if not ok or saved ~= true then
+        activeSettings[key] = previous;
+        message('Ashita could not save the OddCast tier ceiling.', true);
+        return;
+    end
+    local label = action == 'day' and 'Day' or 'Weakness';
+    message(string.format('%s tier ceiling set: %s (%d)', label, tierRoman[ceiling], ceiling), false);
+end
+
 ashita.events.register('command', 'oddcast_command_cb', function(e)
     local args = e.command:args();
     local prefix = string.lower(tostring(args[1] or ''));
@@ -926,9 +1082,30 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
             return;
         end
         if args[3] == nil then
-            showSettings();
+            showTargetSetting();
         else
             setTargetToken(args[3]);
+        end
+        return;
+    end
+    if action == 'tier' then
+        if args[5] ~= nil then
+            message('Too many arguments. Use /oc tier [day|weak] [1-5|I-V|clear].', true);
+            return;
+        end
+        if args[3] == nil then
+            showTierSettings();
+            return;
+        end
+        local tierMode = tierAction(args[3]);
+        if tierMode == nil then
+            message('Unsupported tier mode. Use /oc tier day or /oc tier weak.', true);
+            return;
+        end
+        if args[4] == nil then
+            showTierSetting(tierMode);
+        else
+            setTierCeiling(tierMode, args[4]);
         end
         return;
     end
@@ -984,5 +1161,5 @@ ashita.events.register('unload', 'oddcast_unload_cb', function()
 end);
 
 ashita.events.register('load', 'oddcast_load_cb', function()
-    message('Loaded. Use /oc day, /oc weak, /oc settings, or /oc help.', false);
+    message('Loaded. Use /oc day, /oc weak, /oc tier, /oc settings, or /oc help.', false);
 end);
