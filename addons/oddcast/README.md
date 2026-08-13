@@ -54,7 +54,7 @@ its recast is zero.
 
 If the player is already casting, OddCast keeps exactly one pending request for
 up to 15 seconds instead of sending a command that FFXI will reject as busy. It
-waits for the cast bar to clear plus a 3.1-second post-cast lock, rechecks the
+waits for the cast bar to clear plus a 0.5-second post-cast settle, rechecks the
 same target identity, recalculates the highest ready spell, and submits a normal
 `/ma` command. OddCast retains the request until the player's incoming action
 packet confirms that exact spell started; an unconfirmed submission is retried

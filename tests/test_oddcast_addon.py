@@ -56,7 +56,7 @@ def test_luashitacast_vana_time_adaptation_has_complete_attribution() -> None:
     provenance_index = addon_text.index(provenance)
     signature_index = addon_text.index("local VANA_TIME_SIGNATURE")
     assert 0 < signature_index - provenance_index < 300
-    assert "addon.version = '0.2.6';" in addon_text
+    assert "addon.version = '0.2.7';" in addon_text
 
     for text in readme_texts + notice_texts:
         assert "https://github.com/ThornyFFXI/LuAshitacast" in text
@@ -379,7 +379,10 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "assert(#queued == 5, 'pending cast ignored the post-cast lockout')",
                 "invoke('/oc', 'day')",
                 "assert(#queued == 5, 'repeated command bypassed the inherited post-cast lockout')",
-                "now = now + 3.2",
+                "now = now + 0.4",
+                "callbacks.d3d_present()",
+                "assert(#queued == 5, 'pending cast dispatched before the shortened post-cast lockout')",
+                "now = now + 0.2",
                 "callbacks.d3d_present()",
                 "assert(#queued == 6 and queued[6].command == '/ma \"Water IV\" <t>', 'pending cast did not dispatch after the cast lock cleared')",
                 "assert(callbacks.packet_in ~= nil, 'cast-start acknowledgement handler was not registered')",

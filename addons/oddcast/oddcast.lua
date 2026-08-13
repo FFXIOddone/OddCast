@@ -4,7 +4,7 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '0.2.6';
+addon.version = '0.2.7';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
@@ -49,7 +49,7 @@ local WEAKNESS_INDEX_FILE = 'weakness_data.lua';
 local weaknessIndex = nil;
 
 local PENDING_REQUEST_TTL_SECONDS = 15.0;
-local POST_CAST_LOCK_SECONDS = 3.1;
+local POST_CAST_LOCK_SECONDS = 0.5;
 local START_ACK_SECONDS = 2.0;
 local RETRY_LOCK_SECONDS = 1.1;
 local MAX_SUBMISSIONS = 4;
