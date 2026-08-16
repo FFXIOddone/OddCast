@@ -4,7 +4,7 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '1.1.0';
+addon.version = '1.1.1';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
@@ -18,6 +18,7 @@ local defaultSettings = T{
     target = '<t>',
     dayTierCeiling = 5,
     weaknessTierCeiling = 5,
+    showRoutineChat = false,
 };
 local activeSettings = settings.load(defaultSettings);
 local settingsWindowOpen = { false };
@@ -149,6 +150,12 @@ local function message(text, isError)
     print(chat.header('OddCast') .. formatter(text));
 end
 
+local function routineMessage(text)
+    if activeSettings ~= nil and activeSettings.showRoutineChat == true then
+        message(text, false);
+    end
+end
+
 local function isInteger(value)
     return type(value) == 'number'
         and value == value
@@ -277,6 +284,14 @@ local function configuredTargetToken()
         return token, nil;
     end
     return nil, 'OddCast target setting is invalid. Use /oc target <t> or /oc target <bt>.';
+end
+
+local function configuredRoutineChat()
+    local value = activeSettings and activeSettings.showRoutineChat;
+    if type(value) == 'boolean' then
+        return value, nil;
+    end
+    return nil, 'OddCast routine chat setting is invalid. Use /oc chat on or /oc chat off.';
 end
 
 local function resolvedTargetServerId(value)
@@ -662,7 +677,7 @@ local function chooseDay(target)
         message(queueError, true);
         return false;
     end
-    message(string.format('%s (%s): submitted %s.', day.day, day.element, best.name), false);
+    routineMessage(string.format('%s (%s): submitted %s.', day.day, day.element, best.name));
     return true;
 end
 
@@ -770,16 +785,15 @@ local function chooseWeakness(target)
         return false;
     end
     if usedFallback then
-        message(
+        routineMessage(
             string.format(
                 '%s: Target weakness unavailable; submitted strongest modeled ready spell %s.',
                 target.name,
                 best.name
-            ),
-            false
+            )
         );
     else
-        message(string.format('%s: typical family baseline submitted %s.', target.name, best.name), false);
+        routineMessage(string.format('%s: typical family baseline submitted %s.', target.name, best.name));
     end
     return true;
 end
@@ -881,7 +895,7 @@ local function processPendingRequest()
                 pending.notBefore = math.max(pending.notBefore, now + POST_CAST_LOCK_SECONDS);
             end
             busy = false;
-            message('Cast-bar count is not progressing; treating casting as ended.', false);
+            routineMessage('Cast-bar count is not progressing; treating casting as ended.');
         end
     end
     if busy then
@@ -910,7 +924,7 @@ local function processPendingRequest()
             -- duplicate. cast() clears it immediately before the next send.
             pending.ackDeadline = nil;
             pending.notBefore = math.max(pending.notBefore, now + RETRY_LOCK_SECONDS);
-            message('No spell start was confirmed; the pending request will retry.', true);
+            routineMessage('No spell start was confirmed; the pending request will retry.');
         end
     end
     if now < pending.notBefore then
@@ -983,7 +997,7 @@ local function requestAction(action, target)
     then
         local label = action == 'weak' and 'Weakness' or 'Day';
         local prefix = replaced and 'Replaced the pending request. ' or '';
-        message(string.format('%s%s request queued; waiting for the current submission or action lock.', prefix, label), false);
+        routineMessage(string.format('%s%s request queued; waiting for the current submission or action lock.', prefix, label));
         return;
     end
     processPendingRequest();
@@ -1024,7 +1038,7 @@ local function confirmPendingCastStart(e)
 
     local spellName = pending.spellName;
     cancelPendingRequest(nil);
-    message(string.format('Confirmed cast start: %s.', spellName), false);
+    routineMessage(string.format('Confirmed cast start: %s.', spellName));
 end
 
 local function showHelp()
@@ -1035,6 +1049,7 @@ local function showHelp()
     message('/oddcast settings | /oc settings - open the native settings window and report current values.', false);
     message('/oddcast target [<t>|<bt>] | /oc target [<t>|<bt>] - show or set the hostile target token.', false);
     message('/oddcast tier [day|weak] [1-5|I-V|clear] | /oc tier ... - show, set, or reset tier ceilings.', false);
+    message('/oddcast chat [on|off] | /oc chat [on|off] - show or hide routine automatic chat messages.', false);
 end
 
 local function showTargetSetting()
@@ -1072,9 +1087,19 @@ local function showTierSettings()
     showTierSetting('weak');
 end
 
+local function showRoutineChatSetting()
+    local enabled, settingError = configuredRoutineChat();
+    if enabled == nil then
+        message(settingError, true);
+        return;
+    end
+    message(string.format('Routine chat messages: %s', enabled and 'On' or 'Off'), false);
+end
+
 local function showSettings()
     showTargetSetting();
     showTierSettings();
+    showRoutineChatSetting();
 end
 
 local function persistSettingsChanges(changes)
@@ -1167,11 +1192,35 @@ local function setTierCeiling(action, value)
     message(string.format('%s tier ceiling updated: %s (%d)', label, tierRoman[ceiling], ceiling), false);
 end
 
+local function setRoutineChat(value)
+    local enabled = nil;
+    if type(value) == 'boolean' then
+        enabled = value;
+    else
+        local token = string.lower(tostring(value or ''));
+        if token == 'on' then
+            enabled = true;
+        elseif token == 'off' then
+            enabled = false;
+        end
+    end
+    if enabled == nil then
+        message('Unsupported chat setting. Use /oc chat on or /oc chat off.', true);
+        return;
+    end
+    if not persistSettingsChanges({ { key='showRoutineChat', value=enabled } }) then
+        message('Ashita could not save and verify the OddCast settings change.', true);
+        return;
+    end
+    message(string.format('Routine chat messages updated: %s', enabled and 'On' or 'Off'), false);
+end
+
 local function resetSettings()
     if type(activeSettings) == 'table'
         and activeSettings.target == defaultSettings.target
         and activeSettings.dayTierCeiling == defaultSettings.dayTierCeiling
         and activeSettings.weaknessTierCeiling == defaultSettings.weaknessTierCeiling
+        and activeSettings.showRoutineChat == defaultSettings.showRoutineChat
     then
         message('OddCast settings already use the defaults.', false);
         return;
@@ -1181,6 +1230,7 @@ local function resetSettings()
         { key='target', value=defaultSettings.target },
         { key='dayTierCeiling', value=defaultSettings.dayTierCeiling },
         { key='weaknessTierCeiling', value=defaultSettings.weaknessTierCeiling },
+        { key='showRoutineChat', value=defaultSettings.showRoutineChat },
     }) then
         message('Ashita could not save and verify the OddCast settings reset.', true);
         return;
@@ -1225,7 +1275,7 @@ local function renderSettingsWindow()
 
     local beginCalled = false;
     local renderOk, renderError = pcall(function()
-        imgui.SetNextWindowSize({ 380, 270 }, ImGuiCond_FirstUseEver);
+        imgui.SetNextWindowSize({ 380, 330 }, ImGuiCond_FirstUseEver);
         local visible = imgui.Begin('OddCast Settings', settingsWindowOpen, ImGuiWindowFlags_NoCollapse);
         beginCalled = true;
         if not visible then
@@ -1251,6 +1301,19 @@ local function renderSettingsWindow()
         renderTierCombo('Day spell ceiling', 'day');
         renderTierCombo('Weakness / fallback ceiling', 'weak');
         imgui.TextWrapped('Each mode is capped independently. OddCast still chooses the strongest ready eligible spell at or below that tier.');
+
+        imgui.Spacing();
+        imgui.Text('Chat feedback');
+        imgui.Separator();
+        local routineChat = configuredRoutineChat();
+        if routineChat == nil then
+            imgui.TextWrapped('The routine chat setting is invalid. Use the checkbox below to repair it.');
+        end
+        local routineChatRef = { routineChat == true };
+        if imgui.Checkbox('Show routine chat messages', routineChatRef) then
+            setRoutineChat(routineChatRef[1]);
+        end
+        imgui.TextWrapped('Errors and explicit command responses remain visible when routine chat is off.');
 
         imgui.Spacing();
         if imgui.Button('Reset defaults') then
@@ -1311,6 +1374,18 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
         end
         return;
     end
+    if action == 'chat' then
+        if args[4] ~= nil then
+            message('Too many arguments. Use /oc chat on or /oc chat off.', true);
+            return;
+        end
+        if args[3] == nil then
+            showRoutineChatSetting();
+        else
+            setRoutineChat(args[3]);
+        end
+        return;
+    end
     if action == 'help' or action == '?' then
         if args[3] ~= nil then
             message('Too many arguments. Use /oc help.', true);
@@ -1368,5 +1443,5 @@ ashita.events.register('unload', 'oddcast_unload_cb', function()
 end);
 
 ashita.events.register('load', 'oddcast_load_cb', function()
-    message('Loaded. Use /oc day, /oc weak, /oc tier, /oc settings, or /oc help.', false);
+    routineMessage('Loaded. Use /oc day, /oc weak, /oc tier, /oc settings, or /oc help.');
 end);

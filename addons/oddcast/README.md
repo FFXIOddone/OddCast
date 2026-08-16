@@ -37,17 +37,27 @@ Extract the release ZIP's complete `oddcast` directory to
 /oc tier
 /oc tier day <1-5|I-V|clear>
 /oc tier weak <1-5|I-V|clear>
+/oc chat
+/oc chat <on|off>
 /oc help
 ```
 
 `settings` opens OddCast's native Ashita settings window and also prints the
 current values in chat. The window controls `<t>` versus `<bt>`, the independent
-Day and Weakness/fallback tier ceilings, and a one-click reset to safe defaults.
+Day and Weakness/fallback tier ceilings, routine chat feedback, and a one-click
+reset to safe defaults.
 Changes apply immediately only after OddCast saves, reloads, and verifies the
 value through Ashita's settings API. A failed read-back reports an error and
 restores the prior value when Ashita's persistence API remains available.
 Close the window with its normal X; all text commands remain available as a
 fallback.
+
+Routine automatic chat is off by default. `/oc chat on` enables cast submission,
+confirmation, queue, cast-bar, and load status messages; `/oc chat off` hides
+them again. Actionable errors, `/oc help`, setting queries, and setting-change
+confirmations remain visible either way. The same setting is available as
+`Show routine chat messages` in the settings window and is persisted per
+character.
 
 To make every receiving character use the sender's selected monster, send the
 command through MultiSend:

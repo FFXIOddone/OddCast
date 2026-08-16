@@ -39,7 +39,7 @@ def _run_builder(output: Path, *extra: str) -> subprocess.CompletedProcess[str]:
             sys.executable,
             str(BUILDER_PATH),
             "--expect-version",
-            "1.1.0",
+            "1.1.1",
             "--output",
             str(output),
             "--allow-dirty",
@@ -64,7 +64,7 @@ def test_release_builder_is_deterministic_complete_and_version_bound(
 
     artifact_names = {
         "MANIFEST.json",
-        "OddCast-v1.1.0.zip",
+        "OddCast-v1.1.1.zip",
         "SHA256SUMS.txt",
     }
     assert {path.name for path in first.iterdir()} == artifact_names
@@ -72,11 +72,11 @@ def test_release_builder_is_deterministic_complete_and_version_bound(
     for name in artifact_names:
         assert (first / name).read_bytes() == (second / name).read_bytes(), name
 
-    archive = first / "OddCast-v1.1.0.zip"
+    archive = first / "OddCast-v1.1.1.zip"
     manifest = json.loads((first / "MANIFEST.json").read_text(encoding="utf-8"))
     assert manifest["schema"] == 1
     assert manifest["kind"] == "oddcast-release"
-    assert manifest["version"] == "1.1.0"
+    assert manifest["version"] == "1.1.1"
     assert manifest["archive"] == archive.name
     assert manifest["archiveSha256"] == hashlib.sha256(archive.read_bytes()).hexdigest()
     assert set(manifest["files"]) == EXPECTED_MEMBERS
@@ -132,10 +132,10 @@ def test_release_validator_rejects_archive_and_manifest_tampering(
     archive_tamper = tmp_path / "archive-tamper"
     completed = _run_builder(archive_tamper)
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    archive = archive_tamper / "OddCast-v1.1.0.zip"
+    archive = archive_tamper / "OddCast-v1.1.1.zip"
     archive.write_bytes(archive.read_bytes() + b"tampered")
     with pytest.raises(builder.ReleaseError, match="archive SHA-256"):
-        builder.validate_release(archive_tamper, "1.1.0")
+        builder.validate_release(archive_tamper, "1.1.1")
 
     manifest_tamper = tmp_path / "manifest-tamper"
     completed = _run_builder(manifest_tamper)
@@ -149,12 +149,12 @@ def test_release_validator_rejects_archive_and_manifest_tampering(
         newline="\n",
     )
     with pytest.raises(builder.ReleaseError, match="manifest member list"):
-        builder.validate_release(manifest_tamper, "1.1.0")
+        builder.validate_release(manifest_tamper, "1.1.1")
 
     consistent_tamper = tmp_path / "consistent-tamper"
     completed = _run_builder(consistent_tamper)
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    archive = consistent_tamper / "OddCast-v1.1.0.zip"
+    archive = consistent_tamper / "OddCast-v1.1.1.zip"
     with zipfile.ZipFile(archive) as package:
         payload = {info.filename: package.read(info) for info in package.infolist()}
     readme_name = "oddcast/README.md"
@@ -178,9 +178,9 @@ def test_release_validator_rejects_archive_and_manifest_tampering(
         encoding="ascii",
         newline="\n",
     )
-    builder.validate_release(consistent_tamper, "1.1.0")
+    builder.validate_release(consistent_tamper, "1.1.1")
     with pytest.raises(builder.ReleaseError, match="not reproducible"):
-        builder.check_release(consistent_tamper, "1.1.0", True)
+        builder.check_release(consistent_tamper, "1.1.1", True)
 
 
 def test_release_builder_refuses_existing_or_source_outputs_without_writing(
@@ -201,7 +201,7 @@ def test_release_builder_refuses_existing_or_source_outputs_without_writing(
             sys.executable,
             str(BUILDER_PATH),
             "--expect-version",
-            "1.1.0",
+            "1.1.1",
             "--output",
             str(unsafe),
             "--allow-dirty",
@@ -242,7 +242,7 @@ def test_release_version_is_derived_from_the_collected_payload(
 ) -> None:
     builder = _load_builder()
     payload = {member: member.encode("utf-8") for member in builder.ARCHIVE_MEMBERS}
-    payload["oddcast/oddcast.lua"] = b"addon.version = '1.1.0';\n"
+    payload["oddcast/oddcast.lua"] = b"addon.version = '1.1.1';\n"
     source_identity = ("a" * 40, True)
     original_source_version = builder._source_version
 
@@ -260,7 +260,7 @@ def test_release_version_is_derived_from_the_collected_payload(
         version_from_payload,
     )
     output = tmp_path / "release"
-    builder.build_release(output, "1.1.0", True)
+    builder.build_release(output, "1.1.1", True)
     manifest = json.loads((output / "MANIFEST.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == "1.1.0"
+    assert manifest["version"] == "1.1.1"
     assert manifest["sourceCommit"] == source_identity[0]

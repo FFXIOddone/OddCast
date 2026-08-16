@@ -56,7 +56,7 @@ def test_luashitacast_vana_time_adaptation_has_complete_attribution() -> None:
     provenance_index = addon_text.index(provenance)
     signature_index = addon_text.index("local VANA_TIME_SIGNATURE")
     assert 0 < signature_index - provenance_index < 300
-    assert "addon.version = '1.1.0';" in addon_text
+    assert "addon.version = '1.1.1';" in addon_text
 
     for text in readme_texts + notice_texts:
         assert "https://github.com/ThornyFFXI/LuAshitacast" in text
@@ -234,7 +234,7 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "local signatureAddress = 0",
                 "local rawTime = (80002 * 3456) - 92514960",
                 "local mutateTargetOnTimer = false",
-                "local activeSettings = { target='<t>', dayTierCeiling=5, weaknessTierCeiling=5 }",
+                "local activeSettings = { target='<t>', dayTierCeiling=5, weaknessTierCeiling=5, showRoutineChat=true }",
                 "local resources = {}",
                 "local function spell(id, name, mp, blmLevel)",
                 "    resources[id] = { Name={name}, ManaCost=mp, LevelRequired={ [5]=blmLevel } }",
@@ -512,7 +512,7 @@ def test_oddcast_global_mob_weakness_selection_contract(tmp_path: Path) -> None:
                 "local targetIndex, targetServerId, targetName, targetZone = 321, 123456, 'Proof Rabbit', 100",
                 "local playerServerId = 777777",
                 "local known, timers, mutateTarget = {}, {}, false",
-                "local activeSettings = { target='<t>', dayTierCeiling=5, weaknessTierCeiling=5 }",
+                "local activeSettings = { target='<t>', dayTierCeiling=5, weaknessTierCeiling=5, showRoutineChat=true }",
                 "local sourceSha = 'sha256:' .. string.rep('a', 64)",
                 "local fileSha = 'sha256:' .. string.rep('b', 64)",
                 "local elements = { 'Fire', 'Ice', 'Wind', 'Earth', 'Lightning', 'Water' }",
@@ -720,7 +720,7 @@ def test_oddcast_generated_damselfly_and_goblin_profiles_ignore_zone_identity(
                 "struct = {unpack=function(_,data) return data.actorId end}",
                 "package.preload['common'] = function() return true end",
                 "package.preload['imgui'] = function() return {} end",
-                "package.preload['settings'] = function() local value={target='<t>',dayTierCeiling=5,weaknessTierCeiling=5}; return {load=function() return value end,save=function() return true end,register=function() return true end} end",
+                "package.preload['settings'] = function() local value={target='<t>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=false}; return {load=function() return value end,save=function() return true end,register=function() return true end} end",
                 "package.loaded['ffi'] = nil",
                 "package.preload['ffi'] = function() return {cdef=function() end,cast=function() error('unexpected <bt> lookup') end} end",
                 "package.preload['chat'] = function() return { header=function(v) return '['..v..'] ' end, message=function(v) return v end, error=function(v) return v end } end",
@@ -785,7 +785,7 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "local realDofile = dofile",
                 "local callbacks, queued, output = {}, {}, {}",
                 "local playerServerId = 777777",
-                "local activeSettings, settingsCallback = {target='<t>',dayTierCeiling=5,weaknessTierCeiling=5}, nil",
+                "local activeSettings, settingsCallback = {target='<t>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true}, nil",
                 "local saveCount, saveAllowed = 0, true",
                 "local mainIndex, mainServerId, mainName = 321, 111111, 'Main Rabbit'",
                 "local btIndex, btServerId, btName = 322, 222222, 'Battle Rabbit'",
@@ -856,6 +856,7 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "assert(outputHas('Target token: <t>'),'settings did not show default <t>')",
                 "assert(outputHas('Day tier ceiling: V (5)'),'settings did not show the default day ceiling')",
                 "assert(outputHas('Weakness tier ceiling: V (5)'),'settings did not show the default weakness ceiling')",
+                "assert(outputHas('Routine chat messages: On'),'settings did not show the routine chat setting')",
                 "local tierInputs={{'1',1},{'I',1},{'2',2},{'II',2},{'3',3},{'III',3},{'4',4},{'iv',4},{'5',5},{'V',5}}",
                 "for _, pair in ipairs(tierInputs) do",
                 "  local previousWeakness=activeSettings.weaknessTierCeiling",
@@ -938,7 +939,7 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "invoke('/oc','weak',tostring(nonMonsterServerId))",
                 "invoke('/oc','weak',tostring(resolvedServerId),'extra')",
                 "assert(#queued==5 and activeSettings.target=='<t>' and saveCount==2,'invalid or one-shot targets changed persistent settings or queued a spell')",
-                "settingsCallback({target='<stnpc>',dayTierCeiling=5,weaknessTierCeiling=5})",
+                "settingsCallback({target='<stnpc>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true})",
                 "invoke('/oc','weak')",
                 "assert(#queued==5,'corrupt persisted target token queued a spell')",
                 "invoke('/oc','weak',tostring(resolvedServerId))",
@@ -947,7 +948,7 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "castCount=50",
                 "invoke('/oc','weak',tostring(resolvedServerId))",
                 "assert(#queued==6,'busy explicit-ID request submitted before the cast check completed')",
-                "settingsCallback({target='<bt>',dayTierCeiling=5,weaknessTierCeiling=5})",
+                "settingsCallback({target='<bt>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true})",
                 "now=now+0.11",
                 "callbacks.d3d_present()",
                 "assert(#queued==7 and queued[7].command=='/ma \"Fire V\" 333333','target-setting change canceled or retargeted the pending explicit-ID request')",
@@ -959,14 +960,33 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "assert(#queued==8 and queued[8].command=='/ma \"Fire V\" 333333','retry did not preserve the explicit target server ID')",
                 "callbacks.packet_in({id=0x028,data={actorId=playerServerId},data_raw={category=8,spellId=148}})",
                 "castCount=0",
-                "settingsCallback({target='<stnpc>',dayTierCeiling=5,weaknessTierCeiling=5})",
+                "settingsCallback({target='<stnpc>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true})",
                 "invoke('/oc','settings')",
                 "assert(outputHas('target setting is invalid'),'invalid persisted setting was not explained')",
+                "callbacks.d3d_present()",
                 "invoke('/oc','target','<t>')",
                 "assert(saveCount==3,'valid command did not repair an invalid persisted setting')",
                 "saveAllowed=false",
                 "invoke('/oc','target','<bt>')",
                 "assert(activeSettings.target=='<t>' and saveCount==4,'failed settings save did not roll back')",
+                "saveAllowed=true",
+                "invoke('/oc','chat','off')",
+                "assert(activeSettings.showRoutineChat==false and saveCount==5,'chat off was not persisted')",
+                "local quietOutputCount=#output",
+                "invoke('/oc','weak')",
+                "assert(#queued==9,'chat off changed casting behavior')",
+                "now=now+2.1",
+                "callbacks.d3d_present()",
+                "assert(#queued==9,'quiet request retried before the bounded retry lock')",
+                "now=now+1.2",
+                "callbacks.d3d_present()",
+                "assert(#queued==10,'quiet request did not retry normally')",
+                "callbacks.packet_in({id=0x028,data={actorId=playerServerId},data_raw={category=8,spellId=148}})",
+                "assert(#output==quietOutputCount,'routine submission, retry, or confirmation text was printed while chat was off')",
+                "invoke('/oc','weak','[t]')",
+                "assert(#output>quietOutputCount and outputHas('Unsupported one-shot target'),'chat off hid an actionable error')",
+                "invoke('/oc','chat')",
+                "assert(outputHas('Routine chat messages: Off'),'chat query was hidden while routine chat was off')",
                 "print('PASS OddCast target settings and exact token binding')",
             )
         ),
@@ -1009,6 +1029,7 @@ local function copySettings(value)
         target=value.target,
         dayTierCeiling=value.dayTierCeiling,
         weaknessTierCeiling=value.weaknessTierCeiling,
+        showRoutineChat=value.showRoutineChat,
     }
 end
 
@@ -1073,6 +1094,13 @@ imgui.RadioButton = function(label, selected)
     assertString(label, 'radio label')
     assert(type(selected) == 'boolean', 'radio selected state must be boolean')
     if ui.click == label then ui.click = nil; return true end
+    return false
+end
+imgui.Checkbox = function(label, value)
+    uiCall()
+    assertString(label, 'checkbox label')
+    assert(type(value) == 'table' and type(value[1]) == 'boolean', 'checkbox state must be a boolean ref')
+    if ui.click == label then value[1] = not value[1]; ui.click = nil; return true end
     return false
 end
 imgui.BeginCombo = function(label, preview)
@@ -1146,7 +1174,7 @@ ashita = {
 }
 
 dofile(ODDCAST_PATH)
-assert(activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5, 'legacy settings did not gain GUI defaults')
+assert(activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5 and activeSettings.showRoutineChat == false, 'legacy settings did not gain GUI defaults')
 assert(callbacks.command ~= nil and callbacks.d3d_present ~= nil, 'GUI callbacks were not registered')
 
 local function invoke(...)
@@ -1167,45 +1195,50 @@ callbacks.d3d_present()
 assert(ui.beginDepth == 0 and ui.comboDepth == 0, 'initial GUI stacks were not balanced')
 assert(saveCount == 0 and reloadCount == 0, 'opening settings wrote configuration')
 
+ui.click = 'Show routine chat messages'
+callbacks.d3d_present()
+assert(activeSettings.showRoutineChat == true, 'routine chat checkbox did not update its setting')
+assert(saveCount == 1 and reloadCount == 1, 'routine chat checkbox was not saved and read back exactly once')
+
 ui.click = '<bt> - current battle target'
 callbacks.d3d_present()
 assert(activeSettings.target == '<bt>' and activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5, 'target radio changed the wrong setting')
-assert(saveCount == 1 and reloadCount == 1, 'target radio was not saved and read back exactly once')
+assert(saveCount == 2 and reloadCount == 2, 'target radio was not saved and read back exactly once')
 ui.click = '<bt> - current battle target'
 callbacks.d3d_present()
-assert(saveCount == 1 and reloadCount == 1, 'selecting the active target caused a needless write')
+assert(saveCount == 2 and reloadCount == 2, 'selecting the active target caused a needless write')
 
 ui.openCombo, ui.click = 'Day spell ceiling', 'III (3)##oddcast_day_3'
 callbacks.d3d_present()
 ui.openCombo = nil
 assert(activeSettings.dayTierCeiling == 3 and activeSettings.weaknessTierCeiling == 5, 'day combo changed the wrong ceiling')
-assert(saveCount == 2 and reloadCount == 2, 'day combo was not saved and read back exactly once')
+assert(saveCount == 3 and reloadCount == 3, 'day combo was not saved and read back exactly once')
 
 ui.openCombo, ui.click = 'Weakness / fallback ceiling', 'II (2)##oddcast_weak_2'
 callbacks.d3d_present()
 ui.openCombo = nil
 assert(activeSettings.dayTierCeiling == 3 and activeSettings.weaknessTierCeiling == 2, 'weakness combo changed the wrong ceiling')
-assert(saveCount == 3 and reloadCount == 3, 'weakness combo was not saved and read back exactly once')
+assert(saveCount == 4 and reloadCount == 4, 'weakness combo was not saved and read back exactly once')
 
 ui.click = 'Reset defaults'
 callbacks.d3d_present()
-assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5, 'reset defaults was incomplete')
-assert(saveCount == 4 and reloadCount == 4, 'reset defaults was not one verified write')
+assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5 and activeSettings.showRoutineChat == false, 'reset defaults was incomplete')
+assert(saveCount == 5 and reloadCount == 5, 'reset defaults was not one verified write')
 
 saveResult = false
 ui.click = '<bt> - current battle target'
 callbacks.d3d_present()
-assert(activeSettings.target == '<t>' and saveCount == 5 and reloadCount == 4, 'failed save did not roll back without reload')
+assert(activeSettings.target == '<t>' and saveCount == 6 and reloadCount == 5, 'failed save did not roll back without reload')
 saveResult = true
 
 writeThrough = false
 ui.openCombo, ui.click = 'Day spell ceiling', 'III (3)##oddcast_day_3'
 callbacks.d3d_present()
 ui.openCombo, writeThrough = nil, true
-assert(activeSettings.dayTierCeiling == 5 and saveCount == 6 and reloadCount == 5, 'read-back mismatch did not restore persisted state')
+assert(activeSettings.dayTierCeiling == 5 and saveCount == 7 and reloadCount == 6, 'read-back mismatch did not restore persisted state')
 assert(outputHas('could not save and verify'), 'persistence failure was not explained')
 
-activeSettings = { target='<invalid>', dayTierCeiling=0, weaknessTierCeiling='bad' }
+activeSettings = { target='<invalid>', dayTierCeiling=0, weaknessTierCeiling='bad', showRoutineChat='bad' }
 settingsCallback(activeSettings)
 callbacks.d3d_present()
 assert(ui.beginDepth == 0 and ui.comboDepth == 0, 'corrupt settings broke GUI rendering')
@@ -1217,7 +1250,9 @@ ui.openCombo = nil
 ui.openCombo, ui.click = 'Weakness / fallback ceiling', 'I (1)##oddcast_weak_1'
 callbacks.d3d_present()
 ui.openCombo = nil
-assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 4 and activeSettings.weaknessTierCeiling == 1, 'GUI could not repair corrupt settings')
+ui.click = 'Show routine chat messages'
+callbacks.d3d_present()
+assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 4 and activeSettings.weaknessTierCeiling == 1 and activeSettings.showRoutineChat == true, 'GUI could not repair corrupt settings')
 
 ui.closeOnBegin = true
 callbacks.d3d_present()
