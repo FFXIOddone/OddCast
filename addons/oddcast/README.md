@@ -24,8 +24,12 @@ Extract the release ZIP's complete `oddcast` directory to
 ```text
 /oddcast day
 /oc day
+/oddcast day [SERVER_ID]
+/oc day [SERVER_ID]
 /oddcast weakness
 /oc weak
+/oddcast weakness [SERVER_ID]
+/oc weak [SERVER_ID]
 /oc settings
 /oc target
 /oc target <t>
@@ -44,6 +48,21 @@ value through Ashita's settings API. A failed read-back reports an error and
 restores the prior value when Ashita's persistence API remains available.
 Close the window with its normal X; all text commands remain available as a
 fallback.
+
+To make every receiving character use the sender's selected monster, send the
+command through MultiSend:
+
+```text
+/ms send /oc day [t]
+/ms send /oc weak [t]
+```
+
+MultiSend resolves `[t]` on the sending character and replaces it with that
+target's decimal server ID before OddCast receives the command. OddCast treats
+that ID as a one-shot target; it does not change or save the receiver's
+`<t>`/`<bt>` setting. A direct `/oc weak [t]` is invalid because `[t]` must be
+expanded by MultiSend first. The resolved monster must be visible to each
+receiving client in the same zone.
 
 `day` reads the client's current Vana'diel day and queues the highest modeled
 ready single-target spell of that element. For the six standard tier lines,
@@ -85,9 +104,11 @@ same target identity, recalculates the highest ready spell, and submits a normal
 packet confirms that exact spell started; an unconfirmed submission is retried
 at most four times inside the same 15-second bound. A newer `/oc day` or
 `/oc weak` replaces the not-yet-submitted intent; any already-submitted attempt
-remains the sole in-flight cast until it starts or its retry lock ends. A target or target-setting change,
-expiry, ambiguous cast start, or addon unload cancels it. This is bounded
-completion of an explicit command, not an automatic rotation.
+remains the sole in-flight cast until it starts or its retry lock ends. A target
+identity change, a target-setting change for a request that used the setting,
+expiry, ambiguous cast start, or addon unload cancels it. One-shot server-ID
+requests remain bound to their captured target even if `<t>` or `<bt>` changes.
+This is bounded completion of an explicit command, not an automatic rotation.
 
 `target` controls the hostile-target token used by both cast commands. The
 default is `<t>`; `<bt>` selects Ashita's current battle target. `/oc target`
@@ -99,11 +120,11 @@ fail closed; finish or cancel it before using OddCast.
 
 Missing or invalid settings, targets, spell resources, job levels, MP, recast
 data, Vana time, the weakness index, or the chat command queue all fail closed
-and submit nothing. OddCast resolves the configured token first, then rechecks the
-same token's zone, target index, server ID, and target name immediately before
-either command is submitted. Normal FFXI checks still decide whether the queued
-command executes; OddCast does not claim the caster remained in range,
-unsilenced, or on the same target when the client later executes the token.
+and submit nothing. OddCast resolves the configured token or one-shot server ID
+first, then rechecks the same target's zone, index, server ID, and name
+immediately before either command is submitted. Normal FFXI checks still decide
+whether the queued command executes; OddCast does not claim the caster remained
+in range or unsilenced when the client later executes it.
 
 The displayed result is a **typical family baseline**, not an actual damage
 prediction. The one generated table records its pinned CatsEye source SHA-256;

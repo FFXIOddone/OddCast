@@ -4,7 +4,7 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '1.0.0';
+addon.version = '1.1.0';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
@@ -59,6 +59,7 @@ local START_ACK_SECONDS = 2.0;
 local RETRY_LOCK_SECONDS = 1.1;
 local MAX_SUBMISSIONS = 4;
 local PRESENT_THROTTLE_SECONDS = 0.05;
+local MAX_SERVER_ID = 4294967295;
 local pendingRequest = nil;
 local lastPresentAt = nil;
 
@@ -278,6 +279,30 @@ local function configuredTargetToken()
     return nil, 'OddCast target setting is invalid. Use /oc target <t> or /oc target <bt>.';
 end
 
+local function resolvedTargetServerId(value)
+    local token = tostring(value or '');
+    if string.match(token, '^%d+$') == nil then
+        return nil;
+    end
+    local serverId = tonumber(token);
+    if not isPositiveInteger(serverId) or serverId > MAX_SERVER_ID then
+        return nil;
+    end
+    return serverId;
+end
+
+local function requestTargetToken(value)
+    if value == nil then
+        return configuredTargetToken();
+    end
+    local token = tostring(value);
+    local serverId = resolvedTargetServerId(token);
+    if serverId ~= nil then
+        return tostring(serverId), nil;
+    end
+    return nil, 'Unsupported one-shot target. Use MultiSend [t] so OddCast receives a decimal server ID.';
+end
+
 local function configuredTierCeiling(action)
     local key = action == 'day' and 'dayTierCeiling' or 'weaknessTierCeiling';
     local value = activeSettings and activeSettings[key] or nil;
@@ -329,6 +354,23 @@ local function targetIndexForToken(memory, token)
         return battleTargetIndex();
     end
 
+    local serverId = resolvedTargetServerId(token);
+    if serverId ~= nil then
+        local resourceManager = safe(nil, function()
+            return AshitaCore:GetResourceManager();
+        end);
+        if resourceManager == nil then
+            return nil, nil, 'Ashita resource manager is unavailable; no spell was queued.';
+        end
+        local index = tonumber(safe(0, function()
+            return resourceManager:GetEntityIndexById(serverId);
+        end)) or 0;
+        if not isPositiveInteger(index) then
+            return nil, nil, 'The resolved target is not visible in this client; no spell was queued.';
+        end
+        return index, serverId, nil;
+    end
+
     local target = safe(nil, function() return memory:GetTarget(); end);
     if target == nil then
         return nil, nil, 'Target memory is unavailable.';
@@ -337,7 +379,11 @@ local function targetIndexForToken(memory, token)
     if subTargetActive == nil then
         return nil, nil, 'The <t> target state is unavailable; no spell was queued.';
     end
-    if subTargetActive == true or (tonumber(subTargetActive) or 0) ~= 0 then
+    local hasSubTarget = subTargetActive == true or (tonumber(subTargetActive) or 0) ~= 0;
+    if token ~= '<t>' then
+        return nil, nil, 'OddCast received an invalid target token; no spell was queued.';
+    end
+    if hasSubTarget then
         return nil, nil, 'Finish or cancel the active subtarget before using OddCast.';
     end
 
@@ -379,7 +425,7 @@ local function currentTarget(token)
         return nil, 'The selected monster has no readable server ID.';
     end
     if isPositiveInteger(nativeServerId) and nativeServerId ~= serverId then
-        return nil, 'The <bt> identity changed during resolution; no spell was queued.';
+        return nil, 'The resolved target identity changed during resolution; no spell was queued.';
     end
 
     local party = safe(nil, function() return memory:GetParty(); end);
@@ -520,9 +566,11 @@ local function readySpells(memory, tierCeiling)
 end
 
 local function cast(spell, expectedTarget)
-    local configuredToken = configuredTargetToken();
-    if configuredToken ~= expectedTarget.token then
-        return false, 'Target setting changed during selection; no spell was queued.';
+    if expectedTarget.usesSetting == true then
+        local configuredToken = configuredTargetToken();
+        if configuredToken ~= expectedTarget.token then
+            return false, 'Target setting changed during selection; no spell was queued.';
+        end
     end
 
     local actualTarget, targetError = currentTarget(expectedTarget.token);
@@ -771,10 +819,12 @@ local function processPendingRequest()
         return;
     end
 
-    local configuredToken = configuredTargetToken();
-    if configuredToken ~= pending.target.token then
-        cancelPendingRequest('Target setting changed while the spell request was pending; no spell was submitted.');
-        return;
+    if pending.target.usesSetting == true then
+        local configuredToken = configuredTargetToken();
+        if configuredToken ~= pending.target.token then
+            cancelPendingRequest('Target setting changed while the spell request was pending; no spell was submitted.');
+            return;
+        end
     end
 
     local actualTarget, targetError = currentTarget(pending.target.token);
@@ -782,6 +832,7 @@ local function processPendingRequest()
         cancelPendingRequest(targetError);
         return;
     end
+    actualTarget.usesSetting = pending.target.usesSetting == true;
     if not targetMatches(pending.target, actualTarget) then
         cancelPendingRequest('Target changed while the spell request was pending; no spell was submitted.');
         return;
@@ -905,6 +956,7 @@ local function requestAction(action, target)
             name = target.name,
             zone = target.zone,
             token = target.token,
+            usesSetting = target.usesSetting == true,
         },
         expiresAt = now + PENDING_REQUEST_TTL_SECONDS,
         notBefore = math.max(
@@ -976,8 +1028,10 @@ local function confirmPendingCastStart(e)
 end
 
 local function showHelp()
-    message('/oddcast day | /oc day - highest modeled ready spell matching the current Vana day.', false);
-    message('/oddcast weakness | /oc weak - typical mob-family weakness, independent of zone.', false);
+    message('/oddcast day [target] | /oc day [target] - highest modeled ready spell matching the current Vana day.', false);
+    message('/oddcast weakness [target] | /oc weak [target] - typical mob-family weakness, independent of zone.', false);
+    message('Optional target: the decimal server ID MultiSend supplies after resolving [t].', false);
+    message('MultiSend example: /ms send /oc weak [t] (resolved on the sender and not saved).', false);
     message('/oddcast settings | /oc settings - open the native settings window and report current values.', false);
     message('/oddcast target [<t>|<bt>] | /oc target [<t>|<bt>] - show or set the hostile target token.', false);
     message('/oddcast tier [day|weak] [1-5|I-V|clear] | /oc tier ... - show, set, or reset tier ceilings.', false);
@@ -1257,15 +1311,19 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
         end
         return;
     end
-    if args[3] ~= nil then
-        message('Too many arguments. Use /oc help.', true);
-        return;
-    end
     if action == 'help' or action == '?' then
+        if args[3] ~= nil then
+            message('Too many arguments. Use /oc help.', true);
+            return;
+        end
         showHelp();
         return;
     end
     if action == 'settings' then
+        if args[3] ~= nil then
+            message('Too many arguments. Use /oc settings.', true);
+            return;
+        end
         settingsWindowOpen[1] = true;
         showSettings();
         return;
@@ -1275,26 +1333,24 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
         return;
     end
 
-    local token, tokenError = configuredTargetToken();
+    if args[4] ~= nil then
+        message('Too many arguments. Use /oc day [target] or /oc weak [target].', true);
+        return;
+    end
+
+    local usesSetting = args[3] == nil;
+    local token, tokenError = requestTargetToken(args[3]);
     if token == nil then
         message(tokenError, true);
         return;
     end
-    if action == 'weak' or action == 'weakness' then
-        local target, targetError = currentTarget(token);
-        if target == nil then
-            message(targetError, true);
-            return;
-        end
-        requestAction('weak', target);
-    else
-        local target, targetError = currentTarget(token);
-        if target == nil then
-            message(targetError, true);
-            return;
-        end
-        requestAction('day', target);
+    local target, targetError = currentTarget(token);
+    if target == nil then
+        message(targetError, true);
+        return;
     end
+    target.usesSetting = usesSetting;
+    requestAction(action == 'day' and 'day' or 'weak', target);
 end);
 
 ashita.events.register('packet_in', 'oddcast_cast_start_cb', function(e)
