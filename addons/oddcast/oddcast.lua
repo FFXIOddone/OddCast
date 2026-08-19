@@ -63,6 +63,7 @@ local PRESENT_THROTTLE_SECONDS = 0.05;
 local MAX_SERVER_ID = 4294967295;
 local pendingRequest = nil;
 local lastPresentAt = nil;
+local resolvedTargetIndexByServerId = {};
 
 local dayElements = {
     { day = 'Firesday', element = 'Fire' },
@@ -371,19 +372,35 @@ local function targetIndexForToken(memory, token)
 
     local serverId = resolvedTargetServerId(token);
     if serverId ~= nil then
-        local resourceManager = safe(nil, function()
-            return AshitaCore:GetResourceManager();
-        end);
-        if resourceManager == nil then
-            return nil, nil, 'Ashita resource manager is unavailable; no spell was queued.';
+        local entity = safe(nil, function() return memory:GetEntity(); end);
+        if entity == nil then
+            return nil, nil, 'Entity memory is unavailable; no spell was queued.';
         end
-        local index = tonumber(safe(0, function()
-            return resourceManager:GetEntityIndexById(serverId);
-        end)) or 0;
-        if not isPositiveInteger(index) then
-            return nil, nil, 'The resolved target is not visible in this client; no spell was queued.';
+        local cachedIndex = resolvedTargetIndexByServerId[serverId];
+        if isPositiveInteger(cachedIndex) then
+            local cachedServerId = tonumber(safe(0, function()
+                return entity:GetServerId(cachedIndex);
+            end)) or 0;
+            if cachedServerId == serverId then
+                return cachedIndex, serverId, nil;
+            end
+            resolvedTargetIndexByServerId[serverId] = nil;
         end
-        return index, serverId, nil;
+
+        local mapSize = tonumber(safe(0, function() return entity:GetEntityMapSize(); end)) or 0;
+        if not isPositiveInteger(mapSize) then
+            return nil, nil, 'The entity map is unavailable; no spell was queued.';
+        end
+        for index = 1, mapSize - 1 do
+            local candidateServerId = tonumber(safe(0, function()
+                return entity:GetServerId(index);
+            end)) or 0;
+            if candidateServerId == serverId then
+                resolvedTargetIndexByServerId[serverId] = index;
+                return index, serverId, nil;
+            end
+        end
+        return nil, nil, 'The resolved target is not visible in this client; no spell was queued.';
     end
 
     local target = safe(nil, function() return memory:GetTarget(); end);
@@ -443,6 +460,7 @@ local function currentTarget(token)
     if isPositiveInteger(nativeServerId) and nativeServerId ~= serverId then
         return nil, 'The resolved target identity changed during resolution; no spell was queued.';
     end
+    resolvedTargetIndexByServerId[serverId] = index;
 
     local party = safe(nil, function() return memory:GetParty(); end);
     local zone = party and tonumber(safe(nil, function() return party:GetMemberZone(0); end)) or nil;
