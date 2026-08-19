@@ -4,7 +4,7 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '1.2.0';
+addon.version = '1.3.0';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
@@ -19,6 +19,7 @@ local defaultSettings = T{
     dayTierCeiling = 5,
     weaknessTierCeiling = 5,
     showRoutineChat = false,
+    language = 'en',
 };
 local activeSettings = settings.load(defaultSettings);
 local settingsWindowOpen = { false };
@@ -143,6 +144,51 @@ local function safe(defaultValue, callback)
     return defaultValue;
 end
 
+local localeBundle = safe(nil, function()
+    return dofile(addon.path .. 'locales.lua');
+end);
+if localeBundle == nil then
+    localeBundle = safe({}, function()
+        local source = debug.getinfo(1, 'S').source or '';
+        local path = string.match(source, '^@(.+[\\/])[^\\/]+$');
+        return dofile(path .. 'locales.lua');
+    end);
+end
+local localeOrder = type(localeBundle.order) == 'table' and localeBundle.order or { 'en' };
+local localeNames = type(localeBundle.names) == 'table' and localeBundle.names or { en = 'English' };
+local localeStrings = type(localeBundle.strings) == 'table' and localeBundle.strings or { en = {} };
+
+local function isSupportedLanguage(value)
+    return type(value) == 'string'
+        and localeNames[value] ~= nil
+        and type(localeStrings[value]) == 'table';
+end
+
+local function currentLanguage()
+    local value = activeSettings and activeSettings.language or nil;
+    if isSupportedLanguage(value) then
+        return value;
+    end
+    return 'en';
+end
+
+local function tx(key, ...)
+    local args = { ... };
+    local language = currentLanguage();
+    local selected = localeStrings[language] or {};
+    local english = localeStrings.en or {};
+    local value = selected[key] or english[key] or key;
+    if select('#', ...) == 0 then
+        return value;
+    end
+    local ok, formatted = pcall(string.format, value, unpack(args));
+    if ok then
+        return formatted;
+    end
+    local fallback = english[key] or key;
+    return safe(fallback, function() return string.format(fallback, unpack(args)); end);
+end
+
 local function message(text, isError)
     local formatter = isError and chat.error or chat.message;
     print(chat.header('OddCast') .. formatter(text));
@@ -222,11 +268,11 @@ local function loadWeaknessIndex()
 
     local path = addonFile(WEAKNESS_INDEX_FILE);
     if path == nil then
-        return nil, 'OddCast addon path is unavailable; no spell was queued.';
+        return nil, tx('error_weakness_data');
     end
     local ok, data = pcall(dofile, path);
     if not ok or type(data) ~= 'table' then
-        return nil, 'Weakness index is missing or unreadable; no spell was queued.';
+        return nil, tx('error_weakness_data');
     end
     if data.schema ~= WEAKNESS_SCHEMA
         or not isSha256(data.sourceSha256)
@@ -235,40 +281,40 @@ local function loadWeaknessIndex()
         or type(data.names) ~= 'table'
         or type(data.familyPrefixes) ~= 'table'
     then
-        return nil, 'Weakness index is malformed; no spell was queued.';
+        return nil, tx('error_weakness_data');
     end
     local elementCount = 0;
     for key in pairs(data.elements) do
         elementCount = elementCount + 1;
         if not isPositiveInteger(key) or key > #weaknessElements then
-            return nil, 'Weakness index element list is invalid; no spell was queued.';
+            return nil, tx('error_weakness_data');
         end
     end
     for index, element in ipairs(weaknessElements) do
         if data.elements[index] ~= element then
-            return nil, 'Weakness index element order is invalid; no spell was queued.';
+            return nil, tx('error_weakness_data');
         end
     end
     if elementCount ~= #weaknessElements then
-        return nil, 'Weakness index element list is invalid; no spell was queued.';
+        return nil, tx('error_weakness_data');
     end
     for profileId, profile in pairs(data.profiles) do
         if not isNonNegativeInteger(profileId) or not validProfile(profile) then
-            return nil, 'Weakness index contains a malformed resistance profile; no spell was queued.';
+            return nil, tx('error_weakness_data');
         end
     end
     for name, profileId in pairs(data.names) do
         if type(name) ~= 'string' or name == '' or normalizeMobName(name) ~= name
             or not isNonNegativeInteger(profileId) or data.profiles[profileId] == nil
         then
-            return nil, 'Weakness index contains a malformed mob-name mapping; no spell was queued.';
+            return nil, tx('error_weakness_data');
         end
     end
     for prefix, profileId in pairs(data.familyPrefixes) do
         if type(prefix) ~= 'string' or prefix == '' or normalizeMobName(prefix) ~= prefix
             or not isNonNegativeInteger(profileId) or data.profiles[profileId] == nil
         then
-            return nil, 'Weakness index contains a malformed family mapping; no spell was queued.';
+            return nil, tx('error_weakness_data');
         end
     end
 
@@ -281,7 +327,7 @@ local function configuredTargetToken()
     if token == '<t>' or token == '<bt>' then
         return token, nil;
     end
-    return nil, 'OddCast target setting is invalid. Use /oc target <t> or /oc target <bt>.';
+    return nil, tx('error_target_setting');
 end
 
 local function configuredRoutineChat()
@@ -289,7 +335,15 @@ local function configuredRoutineChat()
     if type(value) == 'boolean' then
         return value, nil;
     end
-    return nil, 'OddCast routine chat setting is invalid. Use /oc chat on or /oc chat off.';
+    return nil, tx('error_chat_setting');
+end
+
+local function configuredLanguage()
+    local value = activeSettings and activeSettings.language or nil;
+    if isSupportedLanguage(value) then
+        return value, nil;
+    end
+    return nil, tx('error_language_setting');
 end
 
 local function resolvedTargetServerId(value)
@@ -316,7 +370,7 @@ local function requestTargetToken(value)
     if serverId ~= nil then
         return tostring(serverId), nil;
     end
-    return nil, 'Unsupported one-shot target. Use [t] or a decimal server ID.';
+    return nil, tx('error_one_shot');
 end
 
 local function configuredTierCeiling(action)
@@ -325,11 +379,7 @@ local function configuredTierCeiling(action)
     if isInteger(value) and value >= 1 and value <= 5 then
         return value, nil;
     end
-    return nil, string.format(
-        'OddCast %s tier ceiling setting is invalid. Use /oc tier %s 1-5 or I-V.',
-        action == 'day' and 'day' or 'weakness',
-        action == 'day' and 'day' or 'weak'
-    );
+    return nil, tx('error_tier');
 end
 
 local function battleTargetIndex()
@@ -342,7 +392,7 @@ local function battleTargetIndex()
         end
     end
     if battleTargetAddress == nil or battleTargetAddress <= 0 then
-        return nil, nil, 'The <bt> resolver is unavailable; no spell was queued.';
+        return nil, nil, tx('error_target');
     end
 
     local ok, actor = pcall(function()
@@ -351,16 +401,16 @@ local function battleTargetIndex()
     end);
     if not ok then
         battleTargetAddress = nil;
-        return nil, nil, 'The <bt> resolver failed; no spell was queued.';
+        return nil, nil, tx('error_target');
     end
     if actor == nil then
-        return nil, nil, 'No battle target is available for <bt>.';
+        return nil, nil, tx('error_target');
     end
 
     local index = tonumber(safe(nil, function() return actor.id.GuideNo; end));
     local serverId = tonumber(safe(nil, function() return actor.id.UniqueNo; end));
     if not isPositiveInteger(index) then
-        return nil, nil, 'No battle target is available for <bt>.';
+        return nil, nil, tx('error_target');
     end
     return index, serverId, nil;
 end
@@ -374,7 +424,7 @@ local function targetIndexForToken(memory, token)
     if serverId ~= nil then
         local entity = safe(nil, function() return memory:GetEntity(); end);
         if entity == nil then
-            return nil, nil, 'Entity memory is unavailable; no spell was queued.';
+            return nil, nil, tx('error_runtime');
         end
         local cachedIndex = resolvedTargetIndexByServerId[serverId];
         if isPositiveInteger(cachedIndex) then
@@ -389,7 +439,7 @@ local function targetIndexForToken(memory, token)
 
         local mapSize = tonumber(safe(0, function() return entity:GetEntityMapSize(); end)) or 0;
         if not isPositiveInteger(mapSize) then
-            return nil, nil, 'The entity map is unavailable; no spell was queued.';
+            return nil, nil, tx('error_runtime');
         end
         for index = 1, mapSize - 1 do
             local candidateServerId = tonumber(safe(0, function()
@@ -400,23 +450,23 @@ local function targetIndexForToken(memory, token)
                 return index, serverId, nil;
             end
         end
-        return nil, nil, 'The resolved target is not visible in this client; no spell was queued.';
+        return nil, nil, tx('error_target');
     end
 
     local target = safe(nil, function() return memory:GetTarget(); end);
     if target == nil then
-        return nil, nil, 'Target memory is unavailable.';
+        return nil, nil, tx('error_runtime');
     end
     local subTargetActive = safe(nil, function() return target:GetIsSubTargetActive(); end);
     if subTargetActive == nil then
-        return nil, nil, 'The local target state is unavailable; no spell was queued.';
+        return nil, nil, tx('error_target');
     end
     local hasSubTarget = subTargetActive == true or (tonumber(subTargetActive) or 0) ~= 0;
     if token ~= '<t>' and token ~= '[t]' then
-        return nil, nil, 'OddCast received an invalid target token; no spell was queued.';
+        return nil, nil, tx('error_target');
     end
     if token == '<t>' and hasSubTarget then
-        return nil, nil, 'Finish or cancel the active subtarget before using OddCast.';
+        return nil, nil, tx('error_subtarget');
     end
 
     local slot = token == '[t]' and hasSubTarget and 1 or 0;
@@ -430,12 +480,12 @@ end
 local function currentTarget(token)
     local memory = safe(nil, function() return AshitaCore:GetMemoryManager(); end);
     if memory == nil then
-        return nil, 'Ashita memory is unavailable.';
+        return nil, tx('error_runtime');
     end
 
     local entity = safe(nil, function() return memory:GetEntity(); end);
     if entity == nil then
-        return nil, 'Entity memory is unavailable.';
+        return nil, tx('error_runtime');
     end
 
     local index, nativeServerId, indexError = targetIndexForToken(memory, token);
@@ -445,27 +495,27 @@ local function currentTarget(token)
 
     local flags = tonumber(safe(0, function() return entity:GetSpawnFlags(index); end)) or 0;
     if bit.band(flags, 0x10) == 0 then
-        return nil, 'The selected target is not a monster.';
+        return nil, tx('error_target_not_monster');
     end
 
     local name = tostring(safe('', function() return entity:GetName(index); end) or '');
     if name == '' then
-        return nil, 'The selected monster has no readable name.';
+        return nil, tx('error_target_name');
     end
 
     local serverId = tonumber(safe(nil, function() return entity:GetServerId(index); end));
     if not isPositiveInteger(serverId) then
-        return nil, 'The selected monster has no readable server ID.';
+        return nil, tx('error_target_id');
     end
     if isPositiveInteger(nativeServerId) and nativeServerId ~= serverId then
-        return nil, 'The resolved target identity changed during resolution; no spell was queued.';
+        return nil, tx('error_target_changed');
     end
     resolvedTargetIndexByServerId[serverId] = index;
 
     local party = safe(nil, function() return memory:GetParty(); end);
     local zone = party and tonumber(safe(nil, function() return party:GetMemberZone(0); end)) or nil;
     if not isPositiveInteger(zone) then
-        return nil, 'The current zone is unavailable.';
+        return nil, tx('error_runtime');
     end
 
     return {
@@ -495,13 +545,13 @@ end
 local function castBarState(memory)
     local castBar = safe(nil, function() return memory:GetCastBar(); end);
     if castBar == nil then
-        return nil, 'Ashita cast-bar state is unavailable; no spell was queued.';
+        return nil, tx('error_runtime');
     end
     -- Count is the stable active-cast signal; Percent can be zero both at the
     -- start of a cast and while the cast bar is idle.
     local count = castBar and tonumber(safe(nil, function() return castBar:GetCount(); end)) or nil;
     if count == nil then
-        return nil, 'Ashita cast-bar state is unavailable; no spell was queued.';
+        return nil, tx('error_runtime');
     end
     return count > 0, nil, count;
 end
@@ -516,21 +566,21 @@ local function currentDay()
         end
     end
     if vanaTimeAddress == nil or vanaTimeAddress <= 0 then
-        return nil, 'Vana time signature scan failed; no spell was queued.';
+        return nil, tx('error_runtime');
     end
 
     local pointer = tonumber(safe(0, function()
         return ashita.memory.read_uint32(vanaTimeAddress + 0x34);
     end)) or 0;
     if pointer <= 0 then
-        return nil, 'Vana time pointer is unavailable; no spell was queued.';
+        return nil, tx('error_runtime');
     end
 
     local raw = tonumber(safe(nil, function()
         return ashita.memory.read_uint32(pointer + 0x0C);
     end));
     if raw == nil or raw <= 0 then
-        return nil, 'Vana time value is unavailable; no spell was queued.';
+        return nil, tx('error_runtime');
     end
 
     local index = (math.floor((raw + VANA_TIME_EPOCH_OFFSET) / VANA_DAY_SECONDS) % 8) + 1;
@@ -567,12 +617,12 @@ local function readySpells(memory, tierCeiling)
     local party = safe(nil, function() return memory:GetParty(); end);
     local recast = safe(nil, function() return memory:GetRecast(); end);
     if resources == nil or player == nil or party == nil or recast == nil then
-        return nil, 'Spell, player, party, or recast data is unavailable.';
+        return nil, tx('error_runtime');
     end
 
     local mp = tonumber(safe(nil, function() return party:GetMemberMP(0); end));
     if mp == nil then
-        return nil, 'Current MP is unavailable.';
+        return nil, tx('error_runtime');
     end
 
     local output = {};
@@ -603,7 +653,7 @@ local function cast(spell, expectedTarget)
     if expectedTarget.usesSetting == true then
         local configuredToken = configuredTargetToken();
         if configuredToken ~= expectedTarget.token then
-            return false, 'Target setting changed during selection; no spell was queued.';
+            return false, tx('error_target_changed');
         end
     end
 
@@ -612,12 +662,12 @@ local function cast(spell, expectedTarget)
         return false, targetError;
     end
     if not targetMatches(expectedTarget, actualTarget) then
-        return false, 'Target changed during selection; no spell was queued.';
+        return false, tx('error_target_changed');
     end
 
     local pending = pendingRequest;
     if pending == nil or not targetMatches(pending.target, expectedTarget) then
-        return false, 'Pending spell identity changed before submission; no retry was armed.';
+        return false, tx('error_runtime');
     end
 
     local commandTarget = expectedTarget.token;
@@ -625,25 +675,25 @@ local function cast(spell, expectedTarget)
         local memory = safe(nil, function() return AshitaCore:GetMemoryManager(); end);
         local target = memory and safe(nil, function() return memory:GetTarget(); end) or nil;
         if target == nil then
-            return false, 'Ashita target manager is unavailable; no spell was queued.';
+            return false, tx('error_runtime');
         end
         local selected = pcall(function()
             target:SetTarget(expectedTarget.index, true);
         end);
         if not selected then
-            return false, 'Ashita could not select the resolved target; no spell was queued.';
+            return false, tx('error_target_select');
         end
         local selectedIndex = tonumber(safe(0, function() return target:GetTargetIndex(0); end)) or 0;
         local selectedServerId = tonumber(safe(0, function() return target:GetServerId(0); end)) or 0;
         if selectedIndex ~= expectedTarget.index or selectedServerId ~= expectedTarget.serverId then
-            return false, 'The resolved target could not be selected exactly; no spell was queued.';
+            return false, tx('error_target_select');
         end
         commandTarget = '<t>';
     end
 
     local chatManager = safe(nil, function() return AshitaCore:GetChatManager(); end);
     if chatManager == nil then
-        return false, 'Ashita chat manager is unavailable; no spell was queued.';
+        return false, tx('error_runtime');
     end
 
     -- Keep a prior submission recognizable until the instant this replacement
@@ -658,7 +708,7 @@ local function cast(spell, expectedTarget)
         chatManager:QueueCommand(1, string.format('/ma "%s" %s', spell.name, commandTarget));
     end);
     if not ok then
-        return false, 'Ashita rejected the queued spell command.';
+        return false, tx('error_runtime');
     end
 
     local now = clockNow();
@@ -708,7 +758,7 @@ local function chooseDay(target)
     end
     best = best or fallback;
     if best == nil then
-        message(string.format('No ready %s spell is learned for %s.', day.element, day.day), true);
+        message(tx('error_no_ready_day', day.element, day.day), true);
         return false;
     end
 
@@ -717,7 +767,7 @@ local function chooseDay(target)
         message(queueError, true);
         return false;
     end
-    routineMessage(string.format('%s (%s): submitted %s.', day.day, day.element, best.name));
+    routineMessage(tx('day_submitted', day.day, day.element, best.name));
     return true;
 end
 
@@ -749,7 +799,7 @@ local function weaknessProfile(target)
     end
     local profile = index.profiles[profileId];
     if not validProfile(profile) then
-        return nil, 'The target weakness profile is malformed; no spell was queued.';
+        return nil, tx('error_weakness_data');
     end
     return profile, nil, false;
 end
@@ -799,7 +849,7 @@ local function chooseWeakness(target)
         end
     end
     if #candidates == 0 then
-        message('No ready six-element tier-line spell is available; no spell was queued.', true);
+        message(tx('error_no_ready_weak'), true);
         return false;
     end
 
@@ -825,15 +875,9 @@ local function chooseWeakness(target)
         return false;
     end
     if usedFallback then
-        routineMessage(
-            string.format(
-                '%s: Target weakness unavailable; submitted strongest modeled ready spell %s.',
-                target.name,
-                best.name
-            )
-        );
+        routineMessage(tx('weak_unknown', target.name, best.name));
     else
-        routineMessage(string.format('%s: typical family baseline submitted %s.', target.name, best.name));
+        routineMessage(tx('weak_family', target.name, best.name));
     end
     return true;
 end
@@ -869,14 +913,14 @@ local function processPendingRequest()
 
     local pending = pendingRequest;
     if now >= pending.expiresAt then
-        cancelPendingRequest('Pending spell request expired; no spell was submitted.');
+        cancelPendingRequest(tx('error_runtime'));
         return;
     end
 
     if pending.target.usesSetting == true then
         local configuredToken = configuredTargetToken();
         if configuredToken ~= pending.target.token then
-            cancelPendingRequest('Target setting changed while the spell request was pending; no spell was submitted.');
+            cancelPendingRequest(tx('error_target_changed'));
             return;
         end
     end
@@ -888,7 +932,7 @@ local function processPendingRequest()
     end
     actualTarget.usesSetting = pending.target.usesSetting == true;
     if not targetMatches(pending.target, actualTarget) then
-        cancelPendingRequest('Target changed while the spell request was pending; no spell was submitted.');
+        cancelPendingRequest(tx('error_target_changed'));
         return;
     end
 
@@ -935,7 +979,7 @@ local function processPendingRequest()
                 pending.notBefore = math.max(pending.notBefore, now + POST_CAST_LOCK_SECONDS);
             end
             busy = false;
-            routineMessage('Cast-bar count is not progressing; treating casting as ended.');
+            routineMessage(tx('cast_stale'));
         end
     end
     if busy then
@@ -948,7 +992,7 @@ local function processPendingRequest()
 
     if pending.awaitingStart then
         if pending.sawCastBar then
-            cancelPendingRequest('A cast began without a matching OddCast spell confirmation; the pending request was canceled.');
+            cancelPendingRequest(tx('error_runtime'));
             return;
         end
         if pending.ackDeadline ~= nil then
@@ -956,7 +1000,7 @@ local function processPendingRequest()
                 return;
             end
             if pending.attempts >= MAX_SUBMISSIONS then
-                cancelPendingRequest('The client did not start the queued spell after four bounded submissions.');
+                cancelPendingRequest(tx('error_runtime'));
                 return;
             end
             -- Retain awaitingStart and the prior spell identity throughout the
@@ -964,7 +1008,7 @@ local function processPendingRequest()
             -- duplicate. cast() clears it immediately before the next send.
             pending.ackDeadline = nil;
             pending.notBefore = math.max(pending.notBefore, now + RETRY_LOCK_SECONDS);
-            routineMessage('No spell start was confirmed; the pending request will retry.');
+            routineMessage(tx('cast_retry'));
         end
     end
     if now < pending.notBefore then
@@ -1035,9 +1079,9 @@ local function requestAction(action, target)
         or now < pendingRequest.notBefore
         or pendingRequest.awaitingStart
     then
-        local label = action == 'weak' and 'Weakness' or 'Day';
-        local prefix = replaced and 'Replaced the pending request. ' or '';
-        routineMessage(string.format('%s%s request queued; waiting for the current submission or action lock.', prefix, label));
+        local label = action == 'weak' and tx('weakness') or tx('day');
+        local prefix = replaced and '> ' or '';
+        routineMessage(tx('request_queued', prefix, label));
         return;
     end
     processPendingRequest();
@@ -1078,18 +1122,19 @@ local function confirmPendingCastStart(e)
 
     local spellName = pending.spellName;
     cancelPendingRequest(nil);
-    routineMessage(string.format('Confirmed cast start: %s.', spellName));
+    routineMessage(tx('cast_confirmed', spellName));
 end
 
 local function showHelp()
-    message('/oddcast day [target] | /oc day [target] - highest modeled ready spell matching the current Vana day.', false);
-    message('/oddcast weakness [target] | /oc weak [target] - typical mob-family weakness, independent of zone.', false);
-    message('Optional target: [t] captures this client target now, or use a decimal server ID.', false);
-    message('Examples: /oc day [t], /oc weak [t], or /ms send /oc weak [t].', false);
-    message('/oddcast settings | /oc settings - open the native settings window and report current values.', false);
-    message('/oddcast target [<t>|<bt>] | /oc target [<t>|<bt>] - show or set the hostile target token.', false);
-    message('/oddcast tier [day|weak] [1-5|I-V|clear] | /oc tier ... - show, set, or reset tier ceilings.', false);
-    message('/oddcast chat [on|off] | /oc chat [on|off] - show or hide routine automatic chat messages.', false);
+    message(tx('help_day'), false);
+    message(tx('help_weak'), false);
+    message(tx('help_optional'), false);
+    message(tx('help_examples'), false);
+    message(tx('help_settings'), false);
+    message(tx('help_target'), false);
+    message(tx('help_tier'), false);
+    message(tx('help_chat'), false);
+    message(tx('help_language'), false);
 end
 
 local function showTargetSetting()
@@ -1098,7 +1143,7 @@ local function showTargetSetting()
         message(tokenError, true);
         return;
     end
-    message(string.format('Target token: %s', token), false);
+    message(tx('target_value', token), false);
 end
 
 local function tierAction(value)
@@ -1118,8 +1163,8 @@ local function showTierSetting(action)
         message(ceilingError, true);
         return;
     end
-    local label = action == 'day' and 'Day' or 'Weakness';
-    message(string.format('%s tier ceiling: %s (%d)', label, tierRoman[ceiling], ceiling), false);
+    local label = action == 'day' and tx('day') or tx('weakness');
+    message(tx('tier_value', label, tierRoman[ceiling], ceiling), false);
 end
 
 local function showTierSettings()
@@ -1133,13 +1178,23 @@ local function showRoutineChatSetting()
         message(settingError, true);
         return;
     end
-    message(string.format('Routine chat messages: %s', enabled and 'On' or 'Off'), false);
+    message(tx('chat_value', enabled and tx('on') or tx('off')), false);
+end
+
+local function showLanguageSetting()
+    local language, settingError = configuredLanguage();
+    if language == nil then
+        message(settingError, true);
+        return;
+    end
+    message(tx('language_value', localeNames[language]), false);
 end
 
 local function showSettings()
     showTargetSetting();
     showTierSettings();
     showRoutineChatSetting();
+    showLanguageSetting();
 end
 
 local function persistSettingsChanges(changes)
@@ -1207,29 +1262,29 @@ end
 local function setTargetToken(value)
     local token = string.lower(tostring(value or ''));
     if token ~= '<t>' and token ~= '<bt>' then
-        message('Unsupported target token. Use /oc target <t> or /oc target <bt>.', true);
+        message(tx('error_target_token'), true);
         return;
     end
     if not persistSettingsChanges({ { key='target', value=token } }) then
-        message('Ashita could not save and verify the OddCast settings change.', true);
+        message(tx('error_settings_save'), true);
         return;
     end
-    message(string.format('Target token updated: %s', token), false);
+    message(tx('target_updated', token), false);
 end
 
 local function setTierCeiling(action, value)
     local ceiling = tierInputs[string.lower(tostring(value or ''))];
     if ceiling == nil then
-        message('Unsupported tier ceiling. Use 1-5, I-V, or clear.', true);
+        message(tx('error_tier'), true);
         return;
     end
     local key = action == 'day' and 'dayTierCeiling' or 'weaknessTierCeiling';
     if not persistSettingsChanges({ { key=key, value=ceiling } }) then
-        message('Ashita could not save and verify the OddCast settings change.', true);
+        message(tx('error_settings_save'), true);
         return;
     end
-    local label = action == 'day' and 'Day' or 'Weakness';
-    message(string.format('%s tier ceiling updated: %s (%d)', label, tierRoman[ceiling], ceiling), false);
+    local label = action == 'day' and tx('day') or tx('weakness');
+    message(tx('tier_updated', label, tierRoman[ceiling], ceiling), false);
 end
 
 local function setRoutineChat(value)
@@ -1245,14 +1300,27 @@ local function setRoutineChat(value)
         end
     end
     if enabled == nil then
-        message('Unsupported chat setting. Use /oc chat on or /oc chat off.', true);
+        message(tx('error_chat'), true);
         return;
     end
     if not persistSettingsChanges({ { key='showRoutineChat', value=enabled } }) then
-        message('Ashita could not save and verify the OddCast settings change.', true);
+        message(tx('error_settings_save'), true);
         return;
     end
-    message(string.format('Routine chat messages updated: %s', enabled and 'On' or 'Off'), false);
+    message(tx('chat_updated', enabled and tx('on') or tx('off')), false);
+end
+
+local function setLanguage(value)
+    local language = string.lower(tostring(value or ''));
+    if not isSupportedLanguage(language) then
+        message(tx('error_language'), true);
+        return;
+    end
+    if not persistSettingsChanges({ { key='language', value=language } }) then
+        message(tx('error_settings_save'), true);
+        return;
+    end
+    message(tx('language_updated', localeNames[language]), false);
 end
 
 local function resetSettings()
@@ -1261,8 +1329,9 @@ local function resetSettings()
         and activeSettings.dayTierCeiling == defaultSettings.dayTierCeiling
         and activeSettings.weaknessTierCeiling == defaultSettings.weaknessTierCeiling
         and activeSettings.showRoutineChat == defaultSettings.showRoutineChat
+        and activeSettings.language == defaultSettings.language
     then
-        message('OddCast settings already use the defaults.', false);
+        message(tx('settings_default'), false);
         return;
     end
 
@@ -1271,17 +1340,18 @@ local function resetSettings()
         { key='dayTierCeiling', value=defaultSettings.dayTierCeiling },
         { key='weaknessTierCeiling', value=defaultSettings.weaknessTierCeiling },
         { key='showRoutineChat', value=defaultSettings.showRoutineChat },
+        { key='language', value=defaultSettings.language },
     }) then
-        message('Ashita could not save and verify the OddCast settings reset.', true);
+        message(tx('error_settings_reset'), true);
         return;
     end
-    message('OddCast settings reset to defaults.', false);
+    message(tx('settings_reset'), false);
 end
 
 local function renderTierCombo(label, action)
     local current = configuredTierCeiling(action);
     local preview = current and string.format('%s (%d)', tierRoman[current], current)
-        or 'Invalid - choose a tier';
+        or tx('error_tier');
     local comboOpen = false;
     local renderOk, renderError = pcall(function()
         comboOpen = imgui.BeginCombo(label, preview);
@@ -1308,6 +1378,34 @@ local function renderTierCombo(label, action)
     end
 end
 
+local function renderLanguageCombo()
+    local current = configuredLanguage();
+    local preview = current and localeNames[current] or tx('error_language');
+    local comboOpen = false;
+    local renderOk, renderError = pcall(function()
+        comboOpen = imgui.BeginCombo(tx('language'), preview);
+        if not comboOpen then
+            return;
+        end
+        for _, code in ipairs(localeOrder) do
+            local itemLabel = string.format('%s##oddcast_language_%s', localeNames[code], code);
+            if imgui.Selectable(itemLabel, current == code) and current ~= code then
+                setLanguage(code);
+            end
+        end
+    end);
+    if comboOpen then
+        local closeOk, closeError = pcall(imgui.EndCombo);
+        if renderOk and not closeOk then
+            renderOk = false;
+            renderError = closeError;
+        end
+    end
+    if not renderOk then
+        error(renderError);
+    end
+end
+
 local function renderSettingsWindow()
     if settingsWindowOpen[1] ~= true then
         return;
@@ -1315,48 +1413,58 @@ local function renderSettingsWindow()
 
     local beginCalled = false;
     local renderOk, renderError = pcall(function()
-        imgui.SetNextWindowSize({ 380, 330 }, ImGuiCond_FirstUseEver);
-        local visible = imgui.Begin('OddCast Settings', settingsWindowOpen, ImGuiWindowFlags_NoCollapse);
+        imgui.SetNextWindowSize({ 430, 410 }, ImGuiCond_FirstUseEver);
+        local visible = imgui.Begin(tx('settings_title'), settingsWindowOpen, ImGuiWindowFlags_NoCollapse);
         beginCalled = true;
         if not visible then
             return;
         end
 
-        imgui.Text('Target');
+        imgui.Text(tx('target'));
         imgui.Separator();
         local target = configuredTargetToken();
         if target == nil then
-            imgui.TextWrapped('The current target setting is invalid. Choose a safe target below to repair it.');
+            imgui.TextWrapped(tx('target_invalid'));
         end
-        if imgui.RadioButton('<t> - current target', target == '<t>') and target ~= '<t>' then
+        if imgui.RadioButton(tx('target_current'), target == '<t>') and target ~= '<t>' then
             setTargetToken('<t>');
         end
-        if imgui.RadioButton('<bt> - current battle target', target == '<bt>') and target ~= '<bt>' then
+        if imgui.RadioButton(tx('target_battle'), target == '<bt>') and target ~= '<bt>' then
             setTargetToken('<bt>');
         end
 
         imgui.Spacing();
-        imgui.Text('Spell tier ceilings');
+        imgui.Text(tx('tier_section'));
         imgui.Separator();
-        renderTierCombo('Day spell ceiling', 'day');
-        renderTierCombo('Weakness / fallback ceiling', 'weak');
-        imgui.TextWrapped('Each mode is capped independently. OddCast still chooses the strongest ready eligible spell at or below that tier.');
+        renderTierCombo(tx('day'), 'day');
+        renderTierCombo(tx('weakness'), 'weak');
+        imgui.TextWrapped(tx('tier_explain'));
 
         imgui.Spacing();
-        imgui.Text('Chat feedback');
+        imgui.Text(tx('chat_section'));
         imgui.Separator();
         local routineChat = configuredRoutineChat();
         if routineChat == nil then
-            imgui.TextWrapped('The routine chat setting is invalid. Use the checkbox below to repair it.');
+            imgui.TextWrapped(tx('chat_invalid'));
         end
         local routineChatRef = { routineChat == true };
-        if imgui.Checkbox('Show routine chat messages', routineChatRef) then
+        if imgui.Checkbox(tx('chat_show'), routineChatRef) then
             setRoutineChat(routineChatRef[1]);
         end
-        imgui.TextWrapped('Errors and explicit command responses remain visible when routine chat is off.');
+        imgui.TextWrapped(tx('chat_explain'));
 
         imgui.Spacing();
-        if imgui.Button('Reset defaults') then
+        imgui.Text(tx('language_section'));
+        imgui.Separator();
+        local language = configuredLanguage();
+        if language == nil then
+            imgui.TextWrapped(tx('language_invalid'));
+        end
+        renderLanguageCombo();
+        imgui.TextWrapped(tx('language_explain'));
+
+        imgui.Spacing();
+        if imgui.Button(tx('reset')) then
             resetSettings();
         end
     end);
@@ -1367,7 +1475,7 @@ local function renderSettingsWindow()
     end
     if not renderOk or not closeOk then
         settingsWindowOpen[1] = false;
-        message('Settings window closed after a rendering error.', true);
+        message(tx('error_render'), true);
         return;
     end
 end
@@ -1383,7 +1491,7 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
     local action = string.lower(tostring(args[2] or 'help'));
     if action == 'target' then
         if args[4] ~= nil then
-            message('Too many arguments. Use /oc target <t> or /oc target <bt>.', true);
+            message(tx('error_usage'), true);
             return;
         end
         if args[3] == nil then
@@ -1395,7 +1503,7 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
     end
     if action == 'tier' then
         if args[5] ~= nil then
-            message('Too many arguments. Use /oc tier [day|weak] [1-5|I-V|clear].', true);
+            message(tx('error_usage'), true);
             return;
         end
         if args[3] == nil then
@@ -1404,7 +1512,7 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
         end
         local tierMode = tierAction(args[3]);
         if tierMode == nil then
-            message('Unsupported tier mode. Use /oc tier day or /oc tier weak.', true);
+            message(tx('error_usage'), true);
             return;
         end
         if args[4] == nil then
@@ -1416,7 +1524,7 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
     end
     if action == 'chat' then
         if args[4] ~= nil then
-            message('Too many arguments. Use /oc chat on or /oc chat off.', true);
+            message(tx('error_usage'), true);
             return;
         end
         if args[3] == nil then
@@ -1426,9 +1534,21 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
         end
         return;
     end
+    if action == 'language' or action == 'lang' then
+        if args[4] ~= nil then
+            message(tx('error_usage'), true);
+            return;
+        end
+        if args[3] == nil then
+            showLanguageSetting();
+        else
+            setLanguage(args[3]);
+        end
+        return;
+    end
     if action == 'help' or action == '?' then
         if args[3] ~= nil then
-            message('Too many arguments. Use /oc help.', true);
+            message(tx('error_usage'), true);
             return;
         end
         showHelp();
@@ -1436,7 +1556,7 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
     end
     if action == 'settings' then
         if args[3] ~= nil then
-            message('Too many arguments. Use /oc settings.', true);
+            message(tx('error_usage'), true);
             return;
         end
         settingsWindowOpen[1] = true;
@@ -1444,12 +1564,12 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
         return;
     end
     if action ~= 'day' and action ~= 'weak' and action ~= 'weakness' then
-        message('Unknown command. Use /oc help.', true);
+        message(tx('error_unknown'), true);
         return;
     end
 
     if args[4] ~= nil then
-        message('Too many arguments. Use /oc day [target] or /oc weak [target].', true);
+        message(tx('error_usage'), true);
         return;
     end
 
@@ -1486,5 +1606,5 @@ ashita.events.register('unload', 'oddcast_unload_cb', function()
 end);
 
 ashita.events.register('load', 'oddcast_load_cb', function()
-    routineMessage('Loaded. Use /oc day, /oc weak, /oc tier, /oc settings, or /oc help.');
+    routineMessage(tx('loaded'));
 end);

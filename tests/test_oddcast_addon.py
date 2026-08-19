@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 ODDCAST_PATH = ROOT / "addons" / "oddcast" / "oddcast.lua"
 ODDCAST_DIR = ODDCAST_PATH.parent
+LOCALES_PATH = ODDCAST_DIR / "locales.lua"
 CATSEYE_SERVER_ROOT = Path(
     os.environ.get("CATSEYE_SERVER_ROOT", ROOT.parent / "server")
 )
@@ -56,7 +57,7 @@ def test_luashitacast_vana_time_adaptation_has_complete_attribution() -> None:
     provenance_index = addon_text.index(provenance)
     signature_index = addon_text.index("local VANA_TIME_SIGNATURE")
     assert 0 < signature_index - provenance_index < 300
-    assert "addon.version = '1.2.0';" in addon_text
+    assert "addon.version = '1.3.0';" in addon_text
 
     for text in readme_texts + notice_texts:
         assert "https://github.com/ThornyFFXI/LuAshitacast" in text
@@ -253,7 +254,7 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "local signatureAddress = 0",
                 "local rawTime = (80002 * 3456) - 92514960",
                 "local mutateTargetOnTimer = false",
-                "local activeSettings = { target='<t>', dayTierCeiling=5, weaknessTierCeiling=5, showRoutineChat=true }",
+                "local activeSettings = { target='<t>', dayTierCeiling=5, weaknessTierCeiling=5, showRoutineChat=true, language='en' }",
                 "local resources = {}",
                 "local function spell(id, name, mp, blmLevel)",
                 "    resources[id] = { Name={name}, ManaCost=mp, LevelRequired={ [5]=blmLevel } }",
@@ -549,7 +550,7 @@ def test_oddcast_global_mob_weakness_selection_contract(tmp_path: Path) -> None:
                 "local targetIndex, targetServerId, targetName, targetZone = 321, 123456, 'Proof Rabbit', 100",
                 "local playerServerId = 777777",
                 "local known, timers, mutateTarget = {}, {}, false",
-                "local activeSettings = { target='<t>', dayTierCeiling=5, weaknessTierCeiling=5, showRoutineChat=true }",
+                "local activeSettings = { target='<t>', dayTierCeiling=5, weaknessTierCeiling=5, showRoutineChat=true, language='en' }",
                 "local sourceSha = 'sha256:' .. string.rep('a', 64)",
                 "local fileSha = 'sha256:' .. string.rep('b', 64)",
                 "local elements = { 'Fire', 'Ice', 'Wind', 'Earth', 'Lightning', 'Water' }",
@@ -757,7 +758,7 @@ def test_oddcast_generated_damselfly_and_goblin_profiles_ignore_zone_identity(
                 "struct = {unpack=function(_,data) return data.actorId end}",
                 "package.preload['common'] = function() return true end",
                 "package.preload['imgui'] = function() return {} end",
-                "package.preload['settings'] = function() local value={target='<t>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=false}; return {load=function() return value end,save=function() return true end,register=function() return true end} end",
+                "package.preload['settings'] = function() local value={target='<t>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=false,language='en'}; return {load=function() return value end,save=function() return true end,register=function() return true end} end",
                 "package.loaded['ffi'] = nil",
                 "package.preload['ffi'] = function() return {cdef=function() end,cast=function() error('unexpected <bt> lookup') end} end",
                 "package.preload['chat'] = function() return { header=function(v) return '['..v..'] ' end, message=function(v) return v end, error=function(v) return v end } end",
@@ -822,7 +823,7 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "local realDofile = dofile",
                 "local callbacks, queued, output = {}, {}, {}",
                 "local playerServerId = 777777",
-                "local activeSettings, settingsCallback = {target='<t>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true}, nil",
+                "local activeSettings, settingsCallback = {target='<t>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true,language='en'}, nil",
                 "local saveCount, saveAllowed = 0, true",
                 "local mainIndex, mainServerId, mainName = 321, 111111, 'Main Rabbit'",
                 "local btIndex, btServerId, btName = 322, 222222, 'Battle Rabbit'",
@@ -896,6 +897,14 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "assert(outputHas('Day tier ceiling: V (5)'),'settings did not show the default day ceiling')",
                 "assert(outputHas('Weakness tier ceiling: V (5)'),'settings did not show the default weakness ceiling')",
                 "assert(outputHas('Routine chat messages: On'),'settings did not show the routine chat setting')",
+                "assert(outputHas('Language: English'),'settings did not show the default language')",
+                "invoke('/oc','language','fr')",
+                "assert(activeSettings.language=='fr' and outputHas('Langue mise à jour : Français'),'French language command was not persisted or localized')",
+                "invoke('/oc','target')",
+                "assert(string.find(output[#output],'Jeton de cible : <t>',1,true),'French target query was not localized')",
+                "invoke('/oc','lang','en')",
+                "assert(activeSettings.language=='en','language alias could not restore English')",
+                "saveCount=0",
                 "local tierInputs={{'1',1},{'I',1},{'2',2},{'II',2},{'3',3},{'III',3},{'4',4},{'iv',4},{'5',5},{'V',5}}",
                 "for _, pair in ipairs(tierInputs) do",
                 "  local previousWeakness=activeSettings.weaknessTierCeiling",
@@ -986,7 +995,7 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "invoke('/oc','weak',tostring(nonMonsterServerId))",
                 "invoke('/oc','weak',tostring(resolvedServerId),'extra')",
                 "assert(#queued==7 and activeSettings.target=='<t>' and saveCount==2,'invalid one-shot targets changed persistent settings or queued a spell')",
-                "settingsCallback({target='<stnpc>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true})",
+                "settingsCallback({target='<stnpc>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true,language='en'})",
                 "invoke('/oc','weak')",
                 "assert(#queued==7,'corrupt persisted target token queued a spell')",
                 "invoke('/oc','weak',tostring(resolvedServerId))",
@@ -995,7 +1004,7 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "castCount=50",
                 "invoke('/oc','weak',tostring(resolvedServerId))",
                 "assert(#queued==8,'busy explicit-ID request submitted before the cast check completed')",
-                "settingsCallback({target='<bt>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true})",
+                "settingsCallback({target='<bt>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true,language='en'})",
                 "now=now+0.11",
                 "callbacks.d3d_present()",
                 "assert(#queued==9 and queued[9].command=='/ma \"Fire V\" <t>' and selectedIndex==resolvedIndex,'target-setting change canceled or retargeted the pending explicit-ID request')",
@@ -1007,7 +1016,7 @@ def test_oddcast_target_settings_bind_selection_and_queued_token(
                 "assert(#queued==10 and queued[10].command=='/ma \"Fire V\" <t>' and selectedIndex==resolvedIndex,'retry did not reselect the explicit target server ID')",
                 "callbacks.packet_in({id=0x028,data={actorId=playerServerId},data_raw={category=8,spellId=148}})",
                 "castCount=0",
-                "settingsCallback({target='<stnpc>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true})",
+                "settingsCallback({target='<stnpc>',dayTierCeiling=5,weaknessTierCeiling=5,showRoutineChat=true,language='en'})",
                 "invoke('/oc','settings')",
                 "assert(outputHas('target setting is invalid'),'invalid persisted setting was not explained')",
                 "callbacks.d3d_present()",
@@ -1077,6 +1086,7 @@ local function copySettings(value)
         dayTierCeiling=value.dayTierCeiling,
         weaknessTierCeiling=value.weaknessTierCeiling,
         showRoutineChat=value.showRoutineChat,
+        language=value.language,
     }
 end
 
@@ -1221,7 +1231,7 @@ ashita = {
 }
 
 dofile(ODDCAST_PATH)
-assert(activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5 and activeSettings.showRoutineChat == false, 'legacy settings did not gain GUI defaults')
+assert(activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5 and activeSettings.showRoutineChat == false and activeSettings.language == 'en', 'legacy settings did not gain GUI defaults')
 assert(callbacks.command ~= nil and callbacks.d3d_present ~= nil, 'GUI callbacks were not registered')
 
 local function invoke(...)
@@ -1255,51 +1265,67 @@ ui.click = '<bt> - current battle target'
 callbacks.d3d_present()
 assert(saveCount == 2 and reloadCount == 2, 'selecting the active target caused a needless write')
 
-ui.openCombo, ui.click = 'Day spell ceiling', 'III (3)##oddcast_day_3'
+ui.openCombo, ui.click = 'Day', 'III (3)##oddcast_day_3'
 callbacks.d3d_present()
 ui.openCombo = nil
 assert(activeSettings.dayTierCeiling == 3 and activeSettings.weaknessTierCeiling == 5, 'day combo changed the wrong ceiling')
 assert(saveCount == 3 and reloadCount == 3, 'day combo was not saved and read back exactly once')
 
-ui.openCombo, ui.click = 'Weakness / fallback ceiling', 'II (2)##oddcast_weak_2'
+ui.openCombo, ui.click = 'Weakness', 'II (2)##oddcast_weak_2'
 callbacks.d3d_present()
 ui.openCombo = nil
 assert(activeSettings.dayTierCeiling == 3 and activeSettings.weaknessTierCeiling == 2, 'weakness combo changed the wrong ceiling')
 assert(saveCount == 4 and reloadCount == 4, 'weakness combo was not saved and read back exactly once')
 
+ui.openCombo, ui.click = 'Language', 'Français##oddcast_language_fr'
+callbacks.d3d_present()
+ui.openCombo = nil
+assert(activeSettings.language == 'fr', 'language combo did not persist French')
+assert(saveCount == 5 and reloadCount == 5, 'French selection was not saved and read back exactly once')
+ui.openCombo, ui.click = 'Langue', 'English##oddcast_language_en'
+callbacks.d3d_present()
+ui.openCombo = nil
+assert(activeSettings.language == 'en', 'localized language combo could not restore English')
+assert(saveCount == 6 and reloadCount == 6, 'English selection was not saved and read back exactly once')
+
 ui.click = 'Reset defaults'
 callbacks.d3d_present()
-assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5 and activeSettings.showRoutineChat == false, 'reset defaults was incomplete')
-assert(saveCount == 5 and reloadCount == 5, 'reset defaults was not one verified write')
+assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5 and activeSettings.showRoutineChat == false and activeSettings.language == 'en', 'reset defaults was incomplete')
+assert(saveCount == 7 and reloadCount == 7, 'reset defaults was not one verified write')
 
 saveResult = false
 ui.click = '<bt> - current battle target'
 callbacks.d3d_present()
-assert(activeSettings.target == '<t>' and saveCount == 6 and reloadCount == 5, 'failed save did not roll back without reload')
+assert(activeSettings.target == '<t>' and saveCount == 8 and reloadCount == 7, 'failed save did not roll back without reload')
 saveResult = true
 
 writeThrough = false
-ui.openCombo, ui.click = 'Day spell ceiling', 'III (3)##oddcast_day_3'
+ui.openCombo, ui.click = 'Day', 'III (3)##oddcast_day_3'
 callbacks.d3d_present()
 ui.openCombo, writeThrough = nil, true
-assert(activeSettings.dayTierCeiling == 5 and saveCount == 7 and reloadCount == 6, 'read-back mismatch did not restore persisted state')
+assert(activeSettings.dayTierCeiling == 5 and saveCount == 9 and reloadCount == 8, 'read-back mismatch did not restore persisted state')
 assert(outputHas('could not save and verify'), 'persistence failure was not explained')
 
-activeSettings = { target='<invalid>', dayTierCeiling=0, weaknessTierCeiling='bad', showRoutineChat='bad' }
+activeSettings = { target='<invalid>', dayTierCeiling=0, weaknessTierCeiling='bad', showRoutineChat='bad', language='bad' }
 settingsCallback(activeSettings)
 callbacks.d3d_present()
 assert(ui.beginDepth == 0 and ui.comboDepth == 0, 'corrupt settings broke GUI rendering')
 ui.click = '<t> - current target'
 callbacks.d3d_present()
-ui.openCombo, ui.click = 'Day spell ceiling', 'IV (4)##oddcast_day_4'
+ui.openCombo, ui.click = 'Day', 'IV (4)##oddcast_day_4'
 callbacks.d3d_present()
 ui.openCombo = nil
-ui.openCombo, ui.click = 'Weakness / fallback ceiling', 'I (1)##oddcast_weak_1'
+ui.openCombo, ui.click = 'Weakness', 'I (1)##oddcast_weak_1'
 callbacks.d3d_present()
 ui.openCombo = nil
 ui.click = 'Show routine chat messages'
 callbacks.d3d_present()
-assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 4 and activeSettings.weaknessTierCeiling == 1 and activeSettings.showRoutineChat == true, 'GUI could not repair corrupt settings')
+ui.openCombo, ui.click = 'Language', 'Español##oddcast_language_es'
+callbacks.d3d_present()
+ui.openCombo = nil
+assert(activeSettings.target == '<t>' and activeSettings.dayTierCeiling == 4 and activeSettings.weaknessTierCeiling == 1 and activeSettings.showRoutineChat == true and activeSettings.language == 'es', 'GUI could not repair corrupt settings')
+invoke('/oc', 'language', 'en')
+assert(activeSettings.language == 'en', 'language command could not restore English after GUI repair')
 
 ui.closeOnBegin = true
 callbacks.d3d_present()
@@ -1357,3 +1383,72 @@ def test_oddcast_compiles_under_luajit(tmp_path: Path) -> None:
         timeout=10,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+    locales_completed = subprocess.run(
+        [luajit, "-b", str(LOCALES_PATH), str(tmp_path / "locales.luac")],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert locales_completed.returncode == 0, (
+        locales_completed.stdout + locales_completed.stderr
+    )
+
+
+def test_oddcast_locale_catalog_is_complete_and_format_safe(tmp_path: Path) -> None:
+    luajit = shutil.which("luajit")
+    assert luajit is not None
+    driver = tmp_path / "locale_contract.lua"
+    driver.write_text(
+        r"""
+local catalog = dofile(arg[1])
+local expected = { 'en', 'fr', 'de', 'ja', 'es', 'zh' }
+assert(#catalog.order == #expected, 'locale order count changed')
+for index, code in ipairs(expected) do
+    assert(catalog.order[index] == code, 'locale order changed')
+    assert(type(catalog.names[code]) == 'string' and catalog.names[code] ~= '', 'locale name missing: ' .. code)
+    assert(type(catalog.strings[code]) == 'table', 'locale table missing: ' .. code)
+end
+
+local formatArgs = {
+    target_value={'<t>'}, chat_value={'On'}, language_value={'English'},
+    target_updated={'<t>'}, chat_updated={'On'}, language_updated={'English'},
+    cast_confirmed={'Fire V'}, tier_value={'Day', 'V', 5},
+    tier_updated={'Day', 'V', 5}, error_no_ready_day={'Fire', 'Firesday'},
+    day_submitted={'Firesday', 'Fire', 'Fire V'}, weak_unknown={'Crab', 'Thunder V'},
+    weak_family={'Crab', 'Thunder V'}, request_queued={'', 'Weakness'},
+}
+
+for key, english in pairs(catalog.strings.en) do
+    assert(type(english) == 'string' and english ~= '', 'empty English locale key: ' .. key)
+    for _, code in ipairs(expected) do
+        local value = catalog.strings[code][key]
+        assert(type(value) == 'string' and value ~= '', code .. ' missing locale key: ' .. key)
+        local args = formatArgs[key]
+        if args ~= nil then
+            local ok, rendered = pcall(string.format, value, unpack(args))
+            assert(ok and type(rendered) == 'string' and rendered ~= '', code .. ' invalid format string: ' .. key)
+        end
+    end
+end
+
+for _, code in ipairs(expected) do
+    for key in pairs(catalog.strings[code]) do
+        assert(catalog.strings.en[key] ~= nil, code .. ' has unknown locale key: ' .. key)
+    end
+end
+print('PASS OddCast locale catalog contract')
+""".lstrip(),
+        encoding="utf-8",
+        newline="\n",
+    )
+    completed = subprocess.run(
+        [luajit, str(driver), str(LOCALES_PATH)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "PASS OddCast locale catalog contract" in completed.stdout

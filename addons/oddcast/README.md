@@ -10,7 +10,7 @@ manual: there is no automatic rotation and no packet injection.
 - a supported FFXI client build with the validated Vana'diel-time layout
 
 Extract the release ZIP's complete `oddcast` directory to
-`Ashita\addons\oddcast`. It must contain exactly `oddcast.lua`,
+`Ashita\addons\oddcast`. It must contain exactly `oddcast.lua`, `locales.lua`,
 `weakness_data.lua`, `weakness_data_manifest.json`, `README.md`,
 `THIRD_PARTY_NOTICES.md`, `LICENSE-LUASHITACAST-MIT`, and
 `LICENSE-ODDCAST-GPL-3.0`. Then run:
@@ -41,13 +41,15 @@ Extract the release ZIP's complete `oddcast` directory to
 /oc tier weak <1-5|I-V|clear>
 /oc chat
 /oc chat <on|off>
+/oc language
+/oc language <en|fr|de|ja|es|zh>
 /oc help
 ```
 
 `settings` opens OddCast's native Ashita settings window and also prints the
 current values in chat. The window controls `<t>` versus `<bt>`, the independent
-Day and Weakness/fallback tier ceilings, routine chat feedback, and a one-click
-reset to safe defaults.
+Day and Weakness/fallback tier ceilings, routine chat feedback, interface
+language, and a one-click reset to safe defaults.
 Changes apply immediately only after OddCast saves, reloads, and verifies the
 value through Ashita's settings API. A failed read-back reports an error and
 restores the prior value when Ashita's persistence API remains available.
@@ -60,6 +62,13 @@ them again. Actionable errors, `/oc help`, setting queries, and setting-change
 confirmations remain visible either way. The same setting is available as
 `Show routine chat messages` in the settings window and is persisted per
 character.
+
+`/oc language` reports the current interface language. Set it to `en`, `fr`,
+`de`, `ja`, `es`, or `zh` for English, French, German, Japanese, Spanish, or
+Simplified Chinese. The same selector is available in the settings window and
+is persisted per character. It translates OddCast's chat, help, and GUI text.
+Spell names, command keywords, target tokens, and player-entered monster names
+remain unchanged so Ashita commands and target identity checks stay exact.
 
 To make every receiving character use the sender's selected monster, send the
 command through MultiSend:

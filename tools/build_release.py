@@ -23,6 +23,7 @@ PAYLOAD_FILES = (
     "LICENSE-ODDCAST-GPL-3.0",
     "README.md",
     "THIRD_PARTY_NOTICES.md",
+    "locales.lua",
     "oddcast.lua",
     "weakness_data.lua",
     "weakness_data_manifest.json",
