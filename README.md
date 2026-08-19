@@ -9,7 +9,7 @@ manual: there is no automatic rotation and no packet injection.
 - Ashita v4
 - a supported FFXI client build with the validated Vana'diel-time layout
 
-For a packaged release, verify `OddCast-v1.1.3.zip` against `SHA256SUMS.txt`,
+For a packaged release, verify `OddCast-v1.2.0.zip` against `SHA256SUMS.txt`,
 then extract its `oddcast` directory into `Ashita\addons`. For a source install,
 copy the complete `addons\oddcast` directory to `Ashita\addons\oddcast`.
 
@@ -188,8 +188,8 @@ luajit -b addons/oddcast/oddcast.lua oddcast.luac
 A clean-worktree release is built and then reproduced byte-for-byte with:
 
 ```text
-python tools/build_release.py --expect-version 1.1.3 --output build/release/v1.1.3
-python tools/build_release.py --expect-version 1.1.3 --output build/release/v1.1.3 --check
+python tools/build_release.py --expect-version 1.2.0 --output build/release/v1.2.0
+python tools/build_release.py --expect-version 1.2.0 --output build/release/v1.2.0 --check
 ```
 
 The builder uses a fixed seven-file allowlist and produces the ZIP,
