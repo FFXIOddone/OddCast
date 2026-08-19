@@ -4,7 +4,7 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '1.1.2';
+addon.version = '1.1.3';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
@@ -308,11 +308,14 @@ local function requestTargetToken(value)
         return configuredTargetToken();
     end
     local token = tostring(value);
+    if string.lower(token) == '[t]' then
+        return '[t]', nil;
+    end
     local serverId = resolvedTargetServerId(token);
     if serverId ~= nil then
         return tostring(serverId), nil;
     end
-    return nil, 'Unsupported one-shot target. Use MultiSend [t] so OddCast receives a decimal server ID.';
+    return nil, 'Unsupported one-shot target. Use [t] or a decimal server ID.';
 end
 
 local function configuredTierCeiling(action)
@@ -389,17 +392,18 @@ local function targetIndexForToken(memory, token)
     end
     local subTargetActive = safe(nil, function() return target:GetIsSubTargetActive(); end);
     if subTargetActive == nil then
-        return nil, nil, 'The <t> target state is unavailable; no spell was queued.';
+        return nil, nil, 'The local target state is unavailable; no spell was queued.';
     end
     local hasSubTarget = subTargetActive == true or (tonumber(subTargetActive) or 0) ~= 0;
-    if token ~= '<t>' then
+    if token ~= '<t>' and token ~= '[t]' then
         return nil, nil, 'OddCast received an invalid target token; no spell was queued.';
     end
-    if hasSubTarget then
+    if token == '<t>' and hasSubTarget then
         return nil, nil, 'Finish or cancel the active subtarget before using OddCast.';
     end
 
-    local index = tonumber(safe(0, function() return target:GetTargetIndex(0); end)) or 0;
+    local slot = token == '[t]' and hasSubTarget and 1 or 0;
+    local index = tonumber(safe(0, function() return target:GetTargetIndex(slot); end)) or 0;
     if index <= 0 then
         return nil, nil, 'Select a monster first.';
     end
@@ -1041,8 +1045,8 @@ end
 local function showHelp()
     message('/oddcast day [target] | /oc day [target] - highest modeled ready spell matching the current Vana day.', false);
     message('/oddcast weakness [target] | /oc weak [target] - typical mob-family weakness, independent of zone.', false);
-    message('Optional target: the decimal server ID MultiSend supplies after resolving [t].', false);
-    message('MultiSend example: /ms send /oc weak [t] (resolved on the sender and not saved).', false);
+    message('Optional target: [t] captures this client target now, or use a decimal server ID.', false);
+    message('Examples: /oc day [t], /oc weak [t], or /ms send /oc weak [t].', false);
     message('/oddcast settings | /oc settings - open the native settings window and report current values.', false);
     message('/oddcast target [<t>|<bt>] | /oc target [<t>|<bt>] - show or set the hostile target token.', false);
     message('/oddcast tier [day|weak] [1-5|I-V|clear] | /oc tier ... - show, set, or reset tier ceilings.', false);
@@ -1420,6 +1424,9 @@ ashita.events.register('command', 'oddcast_command_cb', function(e)
     if target == nil then
         message(targetError, true);
         return;
+    end
+    if token == '[t]' then
+        target.token = tostring(target.serverId);
     end
     target.usesSetting = usesSetting;
     requestAction(action == 'day' and 'day' or 'weak', target);

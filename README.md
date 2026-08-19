@@ -9,7 +9,7 @@ manual: there is no automatic rotation and no packet injection.
 - Ashita v4
 - a supported FFXI client build with the validated Vana'diel-time layout
 
-For a packaged release, verify `OddCast-v1.1.2.zip` against `SHA256SUMS.txt`,
+For a packaged release, verify `OddCast-v1.1.3.zip` against `SHA256SUMS.txt`,
 then extract its `oddcast` directory into `Ashita\addons`. For a source install,
 copy the complete `addons\oddcast` directory to `Ashita\addons\oddcast`.
 
@@ -28,10 +28,12 @@ The installed directory must contain exactly `oddcast.lua`, `weakness_data.lua`,
 /oc day
 /oddcast day [SERVER_ID]
 /oc day [SERVER_ID]
+/oc day [t]
 /oddcast weakness
 /oc weak
 /oddcast weakness [SERVER_ID]
 /oc weak [SERVER_ID]
+/oc weak [t]
 /oc settings
 /oc target
 /oc target <t>
@@ -69,12 +71,13 @@ command through MultiSend:
 /ms send /oc weak [t]
 ```
 
-MultiSend resolves `[t]` on the sending character and replaces it with that
-target's decimal server ID before OddCast receives the command. OddCast treats
-that ID as a one-shot target; it does not change or save the receiver's
-`<t>`/`<bt>` setting. A direct `/oc weak [t]` is invalid because `[t]` must be
-expanded by MultiSend first. The resolved monster must be visible to each
-receiving client in the same zone.
+Direct `/oc day [t]` and `/oc weak [t]` capture this client's selected monster
+immediately. An active subtarget is preferred; otherwise OddCast captures the
+main target. The capture is converted to a decimal server ID before selection,
+waiting, submission, or retry, and it does not change the saved `<t>`/`<bt>`
+setting. MultiSend still resolves `[t]` on the sending character before the
+receiving client sees the command. In either form, the resolved monster must be
+visible to the client in the same zone.
 
 `day` reads the client's current Vana'diel day and queues the highest modeled
 ready single-target spell of that element. For the six standard tier lines,
@@ -185,8 +188,8 @@ luajit -b addons/oddcast/oddcast.lua oddcast.luac
 A clean-worktree release is built and then reproduced byte-for-byte with:
 
 ```text
-python tools/build_release.py --expect-version 1.1.2 --output build/release/v1.1.2
-python tools/build_release.py --expect-version 1.1.2 --output build/release/v1.1.2 --check
+python tools/build_release.py --expect-version 1.1.3 --output build/release/v1.1.3
+python tools/build_release.py --expect-version 1.1.3 --output build/release/v1.1.3 --check
 ```
 
 The builder uses a fixed seven-file allowlist and produces the ZIP,
