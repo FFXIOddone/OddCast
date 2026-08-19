@@ -144,8 +144,9 @@ status, range, and special scripted behavior remain outside this simple model.
 
 Weakness selection remains limited to the six standard single-target INT tier
 lines. AoE, ancient magic, divine/light, helix damage-over-time, Drain, and
-differently scaled spell families are not compared. Light and dark day commands
-can still use a ready direct light/dark spell, with Drain as a Darksday fallback.
+differently scaled spell families are not compared. Lightsday uses the strongest
+ready Dia tier, while Darksday uses the strongest ready Bio tier. Both respect
+the independent day tier ceiling.
 
 ## Third-party attribution
 

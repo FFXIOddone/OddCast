@@ -9,7 +9,7 @@ manual: there is no automatic rotation and no packet injection.
 - Ashita v4
 - a supported FFXI client build with the validated Vana'diel-time layout
 
-For a packaged release, verify `OddCast-v1.1.1.zip` against `SHA256SUMS.txt`,
+For a packaged release, verify `OddCast-v1.1.2.zip` against `SHA256SUMS.txt`,
 then extract its `oddcast` directory into `Ashita\addons`. For a source install,
 copy the complete `addons\oddcast` directory to `Ashita\addons\oddcast`.
 
@@ -146,8 +146,9 @@ status, range, and special scripted behavior remain outside this simple model.
 
 Weakness selection remains limited to the six standard single-target INT tier
 lines. AoE, ancient magic, divine/light, helix damage-over-time, Drain, and
-differently scaled spell families are not compared. Light and dark day commands
-can still use a ready direct light/dark spell, with Drain as a Darksday fallback.
+differently scaled spell families are not compared. Lightsday uses the strongest
+ready Dia tier, while Darksday uses the strongest ready Bio tier. Both respect
+the independent day tier ceiling.
 
 ## Third-party attribution
 
@@ -184,8 +185,8 @@ luajit -b addons/oddcast/oddcast.lua oddcast.luac
 A clean-worktree release is built and then reproduced byte-for-byte with:
 
 ```text
-python tools/build_release.py --expect-version 1.1.1 --output build/release/v1.1.1
-python tools/build_release.py --expect-version 1.1.1 --output build/release/v1.1.1 --check
+python tools/build_release.py --expect-version 1.1.2 --output build/release/v1.1.2
+python tools/build_release.py --expect-version 1.1.2 --output build/release/v1.1.2 --check
 ```
 
 The builder uses a fixed seven-file allowlist and produces the ZIP,

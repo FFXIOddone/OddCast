@@ -4,7 +4,7 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '1.1.1';
+addon.version = '1.1.2';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
@@ -110,17 +110,14 @@ local spells = {
     { id=171, name='Water III',  element='Water',     tier=3, power=230, weak=true },
     { id=172, name='Water IV',   element='Water',     tier=4, power=440, weak=true },
     { id=173, name='Water V',    element='Water',     tier=5, power=700, weak=true },
-    -- Light/dark spells remain available to the day command, but they use
-    -- different stat/formula families and are not compared with INT tier nukes.
-    { id=28,  name='Banish',     element='Light',     tier=1, power=14,  weak=false },
-    { id=29,  name='Banish II',  element='Light',     tier=2, power=85,  weak=false },
-    { id=30,  name='Banish III', element='Light',     tier=3, power=198, weak=false },
-    { id=21,  name='Holy',       element='Light',     tier=1, power=125, weak=false },
-    { id=22,  name='Holy II',    element='Light',     tier=2, power=250, weak=false },
-    { id=219, name='Comet',      element='Dark',      tier=1, power=700, weak=false },
-    { id=245, name='Drain',      element='Dark',      tier=1, power=0,   weak=false, fallback=true },
-    { id=246, name='Drain II',   element='Dark',      tier=2, power=0,   weak=false, fallback=true },
-    { id=880, name='Drain III',  element='Dark',      tier=3, power=0,   weak=false, fallback=true },
+    -- Dia and Bio are the explicit Lightsday and Darksday families. They use
+    -- different stat/formula families and are not considered by weakness mode.
+    { id=23,  name='Dia',        element='Light',     tier=1, power=1,   weak=false },
+    { id=24,  name='Dia II',     element='Light',     tier=2, power=4,   weak=false },
+    { id=25,  name='Dia III',    element='Light',     tier=3, power=16,  weak=false },
+    { id=230, name='Bio',        element='Dark',      tier=1, power=10,  weak=false },
+    { id=231, name='Bio II',     element='Dark',      tier=2, power=50,  weak=false },
+    { id=232, name='Bio III',    element='Dark',      tier=3, power=100, weak=false },
 };
 
 local vanaTimeAddress = nil;

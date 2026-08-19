@@ -56,7 +56,7 @@ def test_luashitacast_vana_time_adaptation_has_complete_attribution() -> None:
     provenance_index = addon_text.index(provenance)
     signature_index = addon_text.index("local VANA_TIME_SIGNATURE")
     assert 0 < signature_index - provenance_index < 300
-    assert "addon.version = '1.1.1';" in addon_text
+    assert "addon.version = '1.1.2';" in addon_text
 
     for text in readme_texts + notice_texts:
         assert "https://github.com/ThornyFFXI/LuAshitacast" in text
@@ -179,6 +179,25 @@ def test_oddcast_weakness_catalog_is_bounded_to_six_unique_tier_lines() -> None:
     assert "Noctohelix" not in addon_text
 
 
+def test_oddcast_light_and_dark_day_families_are_dia_and_bio_only() -> None:
+    addon_text = ODDCAST_PATH.read_text(encoding="utf-8")
+    day_rows = re.findall(
+        r"\{\s*id=(\d+),\s*name='([^']+)',\s*element='(Light|Dark)',"
+        r"\s*tier=(\d+),\s*power=(\d+),\s*weak=false\s*\}",
+        addon_text,
+    )
+    assert day_rows == [
+        ("23", "Dia", "Light", "1", "1"),
+        ("24", "Dia II", "Light", "2", "4"),
+        ("25", "Dia III", "Light", "3", "16"),
+        ("230", "Bio", "Dark", "1", "10"),
+        ("231", "Bio II", "Dark", "2", "50"),
+        ("232", "Bio III", "Dark", "3", "100"),
+    ]
+    for excluded in ("Banish", "Holy", "Comet", "Drain"):
+        assert f"name='{excluded}" not in addon_text
+
+
 @pytest.mark.skipif(
     not CATSEYE_DAMAGE_SPELL_PATH.is_file() or not CATSEYE_MAGIC_ENUM_PATH.is_file(),
     reason="requires the sibling CatsEye server checkout for source parity",
@@ -227,7 +246,7 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "local castCount = 0",
                 "local castbarAvailable = true",
                 "local mainJob, mainLevel, subJob, subLevel = 4, 75, 1, 37",
-                "local known = { [146]=1, [167]=true, [171]=true, [172]=true }",
+                "local known = { [23]=true, [24]=true, [25]=true, [146]=1, [167]=true, [171]=true, [172]=true, [230]=true, [231]=true, [232]=true }",
                 "local timers = {}",
                 "local currentMP = 999",
                 "local chatAvailable = true",
@@ -243,6 +262,12 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "spell(167, 'Thunder IV', 195, 75)",
                 "spell(171, 'Water III', 46, 55)",
                 "spell(172, 'Water IV', 99, 70)",
+                "spell(23, 'Dia', 7, 1)",
+                "spell(24, 'Dia II', 30, 40)",
+                "spell(25, 'Dia III', 45, 75)",
+                "spell(230, 'Bio', 15, 1)",
+                "spell(231, 'Bio II', 36, 40)",
+                "spell(232, 'Bio III', 54, 75)",
                 "local originalPrint = print",
                 "print = function(value) output[#output + 1] = tostring(value); originalPrint(value) end",
                 "T = function(value) return value end",
@@ -473,9 +498,21 @@ def test_oddcast_day_command_and_missing_weakness_data_are_fail_closed(tmp_path:
                 "invoke('/oc', 'day')",
                 "assert(#queued == 13 and queued[13].command == '/ma \"Water III\" <t>', 'day did not apply its independent tier ceiling')",
                 "confirm(171)",
+                "rawTime = (80006 * 3456) - 92514960",
+                "invoke('/oc', 'day')",
+                "assert(#queued == 14 and queued[14].command == '/ma \"Dia III\" <t>', 'Lightsday did not use the strongest ready Dia tier')",
+                "confirm(25)",
+                "rawTime = (80007 * 3456) - 92514960",
+                "invoke('/oc', 'day')",
+                "assert(#queued == 15 and queued[15].command == '/ma \"Bio III\" <t>', 'Darksday did not use the strongest ready Bio tier')",
+                "confirm(232)",
+                "activeSettings.dayTierCeiling = 2",
+                "invoke('/oc', 'day')",
+                "assert(#queued == 16 and queued[16].command == '/ma \"Bio II\" <t>', 'Darksday Bio selection bypassed the day tier ceiling')",
+                "confirm(231)",
                 "castbarAvailable = false",
                 "invoke('/oc', 'day')",
-                "assert(#queued == 13, 'missing cast-bar state submitted a one-shot spell')",
+                "assert(#queued == 16, 'missing cast-bar state submitted a one-shot spell')",
                 "print('PASS OddCast day and missing weakness data fail-closed command contract')",
             )
         ),
