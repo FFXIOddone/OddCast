@@ -25,10 +25,13 @@ PAYLOAD_FILES = (
     "THIRD_PARTY_NOTICES.md",
     "locales.lua",
     "oddcast.lua",
+    "ui_skin.lua",
+    "update_checker.lua",
     "weakness_data.lua",
     "weakness_data_manifest.json",
 )
-ARCHIVE_MEMBERS = tuple(f"oddcast/{name}" for name in PAYLOAD_FILES)
+INSTALLER_FILES = ("Install-OddCast.cmd", "Install-OddCast.ps1")
+ARCHIVE_MEMBERS = tuple(f"oddcast/{name}" for name in PAYLOAD_FILES) + INSTALLER_FILES
 VERSION_PATTERN = re.compile(r"addon\.version\s*=\s*'([0-9]+\.[0-9]+\.[0-9]+)';")
 COMMIT_PATTERN = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
@@ -149,10 +152,16 @@ def _payload() -> dict[str, bytes]:
         extra = sorted(actual - expected)
         raise ReleaseError(f"payload allowlist mismatch; missing={missing}, extra={extra}")
 
-    return {
+    payload = {
         f"oddcast/{name}": (ADDON_ROOT / name).read_bytes()
         for name in PAYLOAD_FILES
     }
+    for name in INSTALLER_FILES:
+        path = ROOT / name
+        if not path.is_file() or _is_link_or_reparse(path):
+            raise ReleaseError(f"installer file is missing or unsafe: {name}")
+        payload[name] = path.read_bytes()
+    return payload
 
 
 def _write_archive(path: Path, payload: dict[str, bytes]) -> None:
@@ -291,10 +300,12 @@ def validate_release(output: Path, expected_version: str) -> None:
                 raise ReleaseError("release payload exceeds the size limit")
             for info in infos:
                 member = PurePosixPath(info.filename)
+                is_installer = info.filename in INSTALLER_FILES
                 if (
                     member.is_absolute()
                     or ".." in member.parts
-                    or member.parts[0] != "oddcast"
+                    or (not is_installer and member.parts[0] != "oddcast")
+                    or (is_installer and len(member.parts) != 1)
                     or info.is_dir()
                 ):
                     raise ReleaseError("release archive contains an unsafe member path")

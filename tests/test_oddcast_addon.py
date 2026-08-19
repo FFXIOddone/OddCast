@@ -1075,8 +1075,8 @@ def test_oddcast_native_settings_gui_is_safe_and_verifies_persistence(
 local ODDCAST_PATH = [[__ODDCAST_PATH__]]
 local callbacks, output, queued = {}, {}, {}
 local settingsCallback = nil
-local activeSettings = { target='<t>' }
-local persisted = { target='<t>' }
+local activeSettings = { target='<t>', onboardingComplete=true }
+local persisted = { target='<t>', onboardingComplete=true }
 local saveCount, reloadCount = 0, 0
 local saveResult, reloadResult, writeThrough = true, true, true
 
@@ -1087,6 +1087,7 @@ local function copySettings(value)
         weaknessTierCeiling=value.weaknessTierCeiling,
         showRoutineChat=value.showRoutineChat,
         language=value.language,
+        onboardingComplete=value.onboardingComplete,
     }
 end
 
@@ -1097,6 +1098,7 @@ struct = { unpack=function() return 0 end }
 addon = { path='fixture/' }
 ImGuiCond_FirstUseEver = 4
 ImGuiWindowFlags_NoCollapse = 32
+package.path = ODDCAST_PATH:match('^(.*[/\\])') .. '?.lua;' .. package.path
 
 local ui = {
     calls=0,
@@ -1146,6 +1148,7 @@ end
 imgui.TextWrapped = function(value) uiCall(); assertString(value, 'wrapped text') end
 imgui.Separator = function() uiCall() end
 imgui.Spacing = function() uiCall() end
+imgui.SameLine = function() uiCall() end
 imgui.RadioButton = function(label, selected)
     uiCall()
     assertString(label, 'radio label')
@@ -1231,7 +1234,7 @@ ashita = {
 }
 
 dofile(ODDCAST_PATH)
-assert(activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5 and activeSettings.showRoutineChat == false and activeSettings.language == 'en', 'legacy settings did not gain GUI defaults')
+assert(activeSettings.dayTierCeiling == 5 and activeSettings.weaknessTierCeiling == 5 and activeSettings.showRoutineChat == false and activeSettings.language == 'en' and activeSettings.onboardingComplete == true, 'legacy settings did not gain GUI defaults')
 assert(callbacks.command ~= nil and callbacks.d3d_present ~= nil, 'GUI callbacks were not registered')
 
 local function invoke(...)
@@ -1370,6 +1373,46 @@ print('PASS OddCast native settings GUI and verified persistence contract')
         "PASS OddCast native settings GUI and verified persistence contract"
         in completed.stdout
     )
+
+
+def test_control_center_uses_oddq_skin_and_manual_update_contract(tmp_path: Path) -> None:
+    source = ODDCAST_PATH.read_text(encoding="utf-8")
+    skin = (ODDCAST_PATH.parent / "ui_skin.lua").read_text(encoding="utf-8")
+    checker = (ODDCAST_PATH.parent / "update_checker.lua").read_text(encoding="utf-8")
+
+    assert "uiSkin.push_window(imgui)" in source
+    assert "requestConfiguredAction('day')" in source
+    assert "requestConfiguredAction('weak')" in source
+    assert "activeSettings.onboardingComplete ~= true" in source
+    assert "updateChecker.check(addon.version)" in source
+    assert "0.063, 0.067, 0.067" in skin
+    assert "0.098, 0.858, 1.000" in skin
+    assert "ODD_NETWORK_CALL: manual read-only GET" in checker
+
+    luajit = shutil.which("luajit")
+    assert luajit is not None
+    driver = tmp_path / "update_checker_contract.lua"
+    driver.write_text(
+        (
+        "local checker=dofile([[__CHECKER__]])\n"
+        "local calls=0\n"
+        "local function response() calls=calls+1; return '{\"tag_name\":\"OddCast-v1.4.0\"}',200 end\n"
+        "local result=checker.check('1.3.0',{request=response})\n"
+        "assert(calls==1 and result.status=='available' and result.latest_version=='1.4.0')\n"
+        "local current=checker.check('1.4.0',{request=response})\n"
+        "assert(current.status=='current')\n"
+        "print('PASS OddCast manual update checker')\n"
+        ).replace(
+            "__CHECKER__", (ODDCAST_PATH.parent / "update_checker.lua").as_posix()
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    completed = subprocess.run(
+        [luajit, str(driver)], check=False, capture_output=True, text=True, timeout=10
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "PASS OddCast manual update checker" in completed.stdout
 
 
 def test_oddcast_compiles_under_luajit(tmp_path: Path) -> None:

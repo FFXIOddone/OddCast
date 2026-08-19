@@ -3,7 +3,7 @@
 
 -- User-interface translations only. Spell and target names remain the exact
 -- game resource values so commands and target identity checks stay safe.
-return {
+local catalog = {
     order = { 'en', 'fr', 'de', 'ja', 'es', 'zh' },
     names = {
         en = 'English', fr = 'Français', de = 'Deutsch',
@@ -12,7 +12,10 @@ return {
     strings = {
         en = {
             on='On', off='Off', day='Day', weakness='Weakness',
-            language='Language', settings_title='OddCast Settings', target='Target',
+            language='Language', settings_title='OddCast Settings', control_title='OddCast Control Center', target='Target',
+            welcome_title='Welcome to OddCast', welcome_body='Choose your target mode and spell ceilings below. OddCast remains fully manual: each button submits one explicit cast request.', finish_setup='Finish setup', setup_complete='OddCast setup complete.',
+            cast_section='Cast controls', cast_explain='Uses the configured target and the strongest ready spell within your ceiling.', cast_day='Cast day element', cast_weak='Cast target weakness', queue_idle='Queue: Ready', queue_pending='Queue: %s on %s',
+            update_section='Updates', installed_version='Installed version: %s', check_updates='Check for updates', update_current='OddCast is up to date.', update_available='OddCast %s is available. Use Install-OddCast.cmd from the new release.', update_unavailable='Update status is unavailable. Check the public OddCast releases page.',
             tier_section='Spell tier ceilings', chat_section='Chat feedback', language_section='Language',
             target_invalid='The current target setting is invalid. Choose a safe target below to repair it.',
             target_current='<t> - current target', target_battle='<bt> - current battle target',
@@ -107,3 +110,13 @@ return {
         },
     },
 };
+
+-- New UI surfaces remain usable while translations catch up: every supported
+-- locale receives the English text for keys it has not translated yet.
+for _, code in ipairs(catalog.order) do
+    for key, value in pairs(catalog.strings.en) do
+        if catalog.strings[code][key] == nil then catalog.strings[code][key] = value end
+    end
+end
+
+return catalog;

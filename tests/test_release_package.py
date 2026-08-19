@@ -14,15 +14,49 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 BUILDER_PATH = ROOT / "tools" / "build_release.py"
 EXPECTED_MEMBERS = {
+    "Install-OddCast.cmd",
+    "Install-OddCast.ps1",
     "oddcast/LICENSE-LUASHITACAST-MIT",
     "oddcast/LICENSE-ODDCAST-GPL-3.0",
     "oddcast/README.md",
     "oddcast/THIRD_PARTY_NOTICES.md",
     "oddcast/locales.lua",
     "oddcast/oddcast.lua",
+    "oddcast/ui_skin.lua",
+    "oddcast/update_checker.lua",
     "oddcast/weakness_data.lua",
     "oddcast/weakness_data_manifest.json",
 }
+
+
+def test_installer_stages_backs_up_and_hash_verifies_payload(tmp_path: Path) -> None:
+    package = tmp_path / "package"
+    payload = package / "oddcast"
+    payload.mkdir(parents=True)
+    for name in (
+        "LICENSE-LUASHITACAST-MIT", "LICENSE-ODDCAST-GPL-3.0", "README.md",
+        "THIRD_PARTY_NOTICES.md", "locales.lua", "oddcast.lua", "ui_skin.lua",
+        "update_checker.lua", "weakness_data.lua", "weakness_data_manifest.json",
+    ):
+        source = ROOT / "addons" / "oddcast" / name
+        (payload / name).write_bytes(source.read_bytes())
+    installer = package / "Install-OddCast.ps1"
+    installer.write_bytes((ROOT / "Install-OddCast.ps1").read_bytes())
+    ashita = tmp_path / "Ashita"
+    installed = ashita / "addons" / "oddcast"
+    installed.mkdir(parents=True)
+    (installed / "old.txt").write_text("old", encoding="utf-8")
+
+    completed = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-File", str(installer), "-AshitaRoot", str(ashita)],
+        check=False, capture_output=True, text=True, timeout=20,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert {path.name for path in installed.iterdir()} == {path.name for path in payload.iterdir()}
+    for source in payload.iterdir():
+        assert (installed / source.name).read_bytes() == source.read_bytes()
+    backups = list((ashita / "addons").glob("oddcast-backup-*"))
+    assert len(backups) == 1 and (backups[0] / "old.txt").read_text(encoding="utf-8") == "old"
 
 
 def _load_builder():

@@ -10,11 +10,15 @@ manual: there is no automatic rotation and no packet injection.
 - a supported FFXI client build with the validated Vana'diel-time layout
 
 For a packaged release, verify `OddCast-v1.3.0.zip` against `SHA256SUMS.txt`,
-then extract its `oddcast` directory into `Ashita\addons`. For a source install,
+extract the complete ZIP, and double-click `Install-OddCast.cmd`. The installer
+locates Ashita, stages and hash-verifies the exact payload, backs up an existing
+install, and verifies the installed copy. For a custom location, run
+`Install-OddCast.cmd -AshitaRoot "C:\path\to\Ashita"`. For a source install,
 copy the complete `addons\oddcast` directory to `Ashita\addons\oddcast`.
 
 The installed directory must contain exactly `oddcast.lua`, `locales.lua`,
-`weakness_data.lua`, `weakness_data_manifest.json`, `README.md`, `THIRD_PARTY_NOTICES.md`,
+`ui_skin.lua`, `update_checker.lua`, `weakness_data.lua`,
+`weakness_data_manifest.json`, `README.md`, `THIRD_PARTY_NOTICES.md`,
 `LICENSE-LUASHITACAST-MIT`, and `LICENSE-ODDCAST-GPL-3.0`. Then run:
 
 ```text
@@ -48,8 +52,10 @@ The installed directory must contain exactly `oddcast.lua`, `locales.lua`,
 /oc help
 ```
 
-`settings` opens OddCast's native Ashita settings window and also prints the
-current values in chat. The window controls `<t>` versus `<bt>`, the independent
+`settings` opens the OddQ-styled OddCast control center and also prints the
+current values in chat. First load opens a short setup view in that same window.
+The control center provides explicit Day and Weakness cast buttons, a manual
+update check, `<t>` versus `<bt>`, the independent
 Day and Weakness/fallback tier ceilings, routine chat feedback, interface
 language, and a one-click reset to safe defaults.
 Changes apply immediately only after OddCast saves, reloads, and verifies the

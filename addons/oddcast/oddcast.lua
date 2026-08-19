@@ -20,9 +20,11 @@ local defaultSettings = T{
     weaknessTierCeiling = 5,
     showRoutineChat = false,
     language = 'en',
+    onboardingComplete = false,
 };
 local activeSettings = settings.load(defaultSettings);
 local settingsWindowOpen = { false };
+local updateState = { status='not_checked' };
 settings.register('settings', 'oddcast_settings_cb', function(updatedSettings)
     activeSettings = updatedSettings;
 end);
@@ -143,6 +145,19 @@ local function safe(defaultValue, callback)
     end
     return defaultValue;
 end
+
+local function loadSibling(name)
+    local loaded = safe(nil, function() return dofile(addon.path .. name); end);
+    if loaded ~= nil then return loaded; end
+    return safe({}, function()
+        local source = debug.getinfo(1, 'S').source or '';
+        local path = string.match(source, '^@(.+[\\/])[^\\/]+$');
+        return dofile(path .. name);
+    end);
+end
+
+local uiSkin = loadSibling('ui_skin.lua');
+local updateChecker = loadSibling('update_checker.lua');
 
 local localeBundle = safe(nil, function()
     return dofile(addon.path .. 'locales.lua');
@@ -1197,6 +1212,15 @@ local function showSettings()
     showLanguageSetting();
 end
 
+local function requestConfiguredAction(action)
+    local token, tokenError = requestTargetToken(nil);
+    if token == nil then message(tokenError, true); return; end
+    local target, targetError = currentTarget(token);
+    if target == nil then message(targetError, true); return; end
+    target.usesSetting = true;
+    requestAction(action, target);
+end
+
 local function persistSettingsChanges(changes)
     if type(activeSettings) ~= 'table' then
         return false;
@@ -1330,6 +1354,7 @@ local function resetSettings()
         and activeSettings.weaknessTierCeiling == defaultSettings.weaknessTierCeiling
         and activeSettings.showRoutineChat == defaultSettings.showRoutineChat
         and activeSettings.language == defaultSettings.language
+        and activeSettings.onboardingComplete == defaultSettings.onboardingComplete
     then
         message(tx('settings_default'), false);
         return;
@@ -1341,6 +1366,7 @@ local function resetSettings()
         { key='weaknessTierCeiling', value=defaultSettings.weaknessTierCeiling },
         { key='showRoutineChat', value=defaultSettings.showRoutineChat },
         { key='language', value=defaultSettings.language },
+        { key='onboardingComplete', value=defaultSettings.onboardingComplete },
     }) then
         message(tx('error_settings_reset'), true);
         return;
@@ -1412,16 +1438,39 @@ local function renderSettingsWindow()
     end
 
     local beginCalled = false;
+    local pushed = nil;
     local renderOk, renderError = pcall(function()
-        imgui.SetNextWindowSize({ 430, 410 }, ImGuiCond_FirstUseEver);
-        local visible = imgui.Begin(tx('settings_title'), settingsWindowOpen, ImGuiWindowFlags_NoCollapse);
+        imgui.SetNextWindowSize({ 560, 610 }, ImGuiCond_FirstUseEver);
+        pushed = uiSkin.push_window(imgui);
+        local visible = imgui.Begin(tx('control_title'), settingsWindowOpen, ImGuiWindowFlags_NoCollapse);
         beginCalled = true;
         if not visible then
             return;
         end
 
-        imgui.Text(tx('target'));
-        imgui.Separator();
+        if activeSettings.onboardingComplete ~= true then
+            uiSkin.section_header(imgui, tx('welcome_title'));
+            imgui.TextWrapped(tx('welcome_body'));
+            if uiSkin.button(imgui, tx('finish_setup'), true, { 180, 0 }) then
+                if persistSettingsChanges({ { key='onboardingComplete', value=true } }) then
+                    message(tx('setup_complete'), false);
+                else
+                    message(tx('error_settings_save'), true);
+                end
+            end
+            imgui.Spacing();
+        end
+
+        uiSkin.section_header(imgui, tx('cast_section'));
+        imgui.TextWrapped(tx('cast_explain'));
+        if uiSkin.button(imgui, tx('cast_day'), true, { 245, 34 }) then requestConfiguredAction('day'); end
+        imgui.SameLine();
+        if uiSkin.button(imgui, tx('cast_weak'), true, { 245, 34 }) then requestConfiguredAction('weak'); end
+        local pendingText = pendingRequest == nil and tx('queue_idle')
+            or tx('queue_pending', pendingRequest.action == 'day' and tx('day') or tx('weakness'), pendingRequest.target.name);
+        uiSkin.muted(imgui, pendingText);
+
+        uiSkin.section_header(imgui, tx('target'));
         local target = configuredTargetToken();
         if target == nil then
             imgui.TextWrapped(tx('target_invalid'));
@@ -1433,16 +1482,12 @@ local function renderSettingsWindow()
             setTargetToken('<bt>');
         end
 
-        imgui.Spacing();
-        imgui.Text(tx('tier_section'));
-        imgui.Separator();
+        uiSkin.section_header(imgui, tx('tier_section'));
         renderTierCombo(tx('day'), 'day');
         renderTierCombo(tx('weakness'), 'weak');
         imgui.TextWrapped(tx('tier_explain'));
 
-        imgui.Spacing();
-        imgui.Text(tx('chat_section'));
-        imgui.Separator();
+        uiSkin.section_header(imgui, tx('chat_section'));
         local routineChat = configuredRoutineChat();
         if routineChat == nil then
             imgui.TextWrapped(tx('chat_invalid'));
@@ -1453,9 +1498,7 @@ local function renderSettingsWindow()
         end
         imgui.TextWrapped(tx('chat_explain'));
 
-        imgui.Spacing();
-        imgui.Text(tx('language_section'));
-        imgui.Separator();
+        uiSkin.section_header(imgui, tx('language_section'));
         local language = configuredLanguage();
         if language == nil then
             imgui.TextWrapped(tx('language_invalid'));
@@ -1463,7 +1506,20 @@ local function renderSettingsWindow()
         renderLanguageCombo();
         imgui.TextWrapped(tx('language_explain'));
 
-        imgui.Spacing();
+        uiSkin.section_header(imgui, tx('update_section'));
+        imgui.Text(tx('installed_version', addon.version));
+        if updateState.status == 'available' then
+            imgui.TextWrapped(tx('update_available', updateState.latest_version));
+            uiSkin.muted(imgui, updateState.release_url);
+        elseif updateState.status == 'current' then
+            imgui.Text(tx('update_current'));
+        elseif updateState.status == 'unavailable' or updateState.status == 'invalid' then
+            imgui.TextWrapped(tx('update_unavailable'));
+        end
+        if uiSkin.button(imgui, tx('check_updates'), false) then
+            updateState = updateChecker.check(addon.version);
+        end
+        imgui.SameLine();
         if imgui.Button(tx('reset')) then
             resetSettings();
         end
@@ -1473,6 +1529,7 @@ local function renderSettingsWindow()
     if beginCalled then
         closeOk = pcall(imgui.End);
     end
+    if pushed ~= nil then pcall(uiSkin.pop, imgui, pushed); end
     if not renderOk or not closeOk then
         settingsWindowOpen[1] = false;
         message(tx('error_render'), true);
@@ -1607,4 +1664,7 @@ end);
 
 ashita.events.register('load', 'oddcast_load_cb', function()
     routineMessage(tx('loaded'));
+    if activeSettings == nil or activeSettings.onboardingComplete ~= true then
+        settingsWindowOpen[1] = true;
+    end
 end);
