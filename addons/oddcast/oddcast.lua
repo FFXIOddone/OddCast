@@ -620,6 +620,27 @@ local function cast(spell, expectedTarget)
         return false, 'Pending spell identity changed before submission; no retry was armed.';
     end
 
+    local commandTarget = expectedTarget.token;
+    if resolvedTargetServerId(expectedTarget.token) ~= nil then
+        local memory = safe(nil, function() return AshitaCore:GetMemoryManager(); end);
+        local target = memory and safe(nil, function() return memory:GetTarget(); end) or nil;
+        if target == nil then
+            return false, 'Ashita target manager is unavailable; no spell was queued.';
+        end
+        local selected = pcall(function()
+            target:SetTarget(expectedTarget.index, true);
+        end);
+        if not selected then
+            return false, 'Ashita could not select the resolved target; no spell was queued.';
+        end
+        local selectedIndex = tonumber(safe(0, function() return target:GetTargetIndex(0); end)) or 0;
+        local selectedServerId = tonumber(safe(0, function() return target:GetServerId(0); end)) or 0;
+        if selectedIndex ~= expectedTarget.index or selectedServerId ~= expectedTarget.serverId then
+            return false, 'The resolved target could not be selected exactly; no spell was queued.';
+        end
+        commandTarget = '<t>';
+    end
+
     local chatManager = safe(nil, function() return AshitaCore:GetChatManager(); end);
     if chatManager == nil then
         return false, 'Ashita chat manager is unavailable; no spell was queued.';
@@ -634,7 +655,7 @@ local function cast(spell, expectedTarget)
     pending.ackDeadline = nil;
     pending.sawCastBar = false;
     local ok = pcall(function()
-        chatManager:QueueCommand(1, string.format('/ma "%s" %s', spell.name, expectedTarget.token));
+        chatManager:QueueCommand(1, string.format('/ma "%s" %s', spell.name, commandTarget));
     end);
     if not ok then
         return false, 'Ashita rejected the queued spell command.';
