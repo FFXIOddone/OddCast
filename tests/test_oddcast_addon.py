@@ -1388,7 +1388,10 @@ def test_control_center_uses_oddq_skin_and_manual_update_contract(tmp_path: Path
     assert "updateChecker.check(addon.version)" in source
     assert "0.063, 0.067, 0.067" in skin
     assert "0.098, 0.858, 1.000" in skin
-    assert "skin.colors.title_bar" in skin
+    assert "transparent = { 0.000, 0.000, 0.000, 0.000 }" in skin
+    assert "ImGuiCol_TitleBg', skin.colors.transparent" in skin
+    assert "ImGuiCol_TitleBgActive', skin.colors.transparent" in skin
+    assert "ImGuiCol_TitleBgCollapsed', skin.colors.transparent" in skin
     assert "ImGuiCol_ScrollbarBg" in skin
     assert "ImGuiCol_ScrollbarGrab" in skin
     assert "ImGuiCol_ScrollbarGrabHovered" in skin
@@ -1423,6 +1426,31 @@ def test_control_center_uses_oddq_skin_and_manual_update_contract(tmp_path: Path
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "PASS OddCast manual update checker" in completed.stdout
+
+
+def test_ui_skin_renders_each_sized_button_exactly_once(tmp_path: Path) -> None:
+    luajit = shutil.which("luajit")
+    assert luajit is not None
+    skin_path = ODDCAST_PATH.parent / "ui_skin.lua"
+    driver = tmp_path / "ui_skin_button_contract.lua"
+    driver.write_text(
+        (
+            "local skin=dofile([[__SKIN__]])\n"
+            "local calls=0\n"
+            "local imgui={Button=function(label,size) calls=calls+1; "
+            "assert(label=='Large'); assert(type(size)=='table' and size[1]==245 and size[2]==34); return false end}\n"
+            "local clicked=skin.button(imgui,'Large',true,{245,34})\n"
+            "assert(clicked==false and calls==1,'sized button rendered more than once')\n"
+            "print('PASS OddCast sized button single-render contract')\n"
+        ).replace("__SKIN__", skin_path.as_posix()),
+        encoding="utf-8",
+        newline="\n",
+    )
+    completed = subprocess.run(
+        [luajit, str(driver)], check=False, capture_output=True, text=True, timeout=10
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "PASS OddCast sized button single-render contract" in completed.stdout
 
 
 def test_oddcast_compiles_under_luajit(tmp_path: Path) -> None:

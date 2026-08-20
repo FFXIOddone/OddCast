@@ -5,7 +5,7 @@ local skin = {}
 skin.colors = {
     bg = { 0.063, 0.067, 0.067, 1.00 },
     panel = { 0.094, 0.102, 0.102, 1.00 },
-    title_bar = { 0.059, 0.541, 0.862, 0.92 },
+    transparent = { 0.000, 0.000, 0.000, 0.000 },
     blue_border = { 0.059, 0.541, 0.862, 0.72 },
     blue_highlight = { 0.098, 0.858, 1.000, 1.00 },
     text = { 1.000, 1.000, 1.000, 1.00 },
@@ -42,9 +42,9 @@ function skin.push_window(imgui)
     push_color(imgui, 'ImGuiCol_Text', skin.colors.text, pushed)
     push_color(imgui, 'ImGuiCol_WindowBg', skin.colors.bg, pushed)
     push_color(imgui, 'ImGuiCol_Border', skin.colors.blue_border, pushed)
-    push_color(imgui, 'ImGuiCol_TitleBg', skin.colors.title_bar, pushed)
-    push_color(imgui, 'ImGuiCol_TitleBgActive', skin.colors.title_bar, pushed)
-    push_color(imgui, 'ImGuiCol_TitleBgCollapsed', skin.colors.title_bar, pushed)
+    push_color(imgui, 'ImGuiCol_TitleBg', skin.colors.transparent, pushed)
+    push_color(imgui, 'ImGuiCol_TitleBgActive', skin.colors.transparent, pushed)
+    push_color(imgui, 'ImGuiCol_TitleBgCollapsed', skin.colors.transparent, pushed)
     push_color(imgui, 'ImGuiCol_Button', { 0.114, 0.110, 0.086, 0.88 }, pushed)
     push_color(imgui, 'ImGuiCol_ButtonHovered', { 0.059, 0.541, 0.862, 0.62 }, pushed)
     push_color(imgui, 'ImGuiCol_ButtonActive', { 0.098, 0.858, 1.000, 0.72 }, pushed)
@@ -87,7 +87,12 @@ function skin.button(imgui, label, primary, size)
     if primary then
         push_color(imgui, 'ImGuiCol_Button', { 0.059, 0.541, 0.862, 0.62 }, pushed)
     end
-    local clicked = size ~= nil and imgui.Button(label, size) or imgui.Button(label)
+    local clicked
+    if size ~= nil then
+        clicked = imgui.Button(label, size)
+    else
+        clicked = imgui.Button(label)
+    end
     skin.pop(imgui, pushed)
     return clicked == true
 end
