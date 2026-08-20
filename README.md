@@ -74,7 +74,10 @@ character.
 `/oc language` reports the current interface language. Set it to `en`, `fr`,
 `de`, `ja`, `es`, or `zh` for English, French, German, Japanese, Spanish, or
 Simplified Chinese. The same selector is available in the settings window and
-is persisted per character. It translates OddCast's chat, help, and GUI text.
+is persisted per character. Japanese and Simplified Chinese use installed
+Windows CJK fonts in the GUI. Because FFXI chat cannot safely represent those
+scripts, chat and help-command replies fall back to English instead of showing
+replacement question marks. Spell names remain game-compatible.
 Spell names, command keywords, target tokens, and player-entered monster names
 remain unchanged so Ashita commands and target identity checks stay exact.
 

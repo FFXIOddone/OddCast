@@ -172,6 +172,11 @@ end
 local localeOrder = type(localeBundle.order) == 'table' and localeBundle.order or { 'en' };
 local localeNames = type(localeBundle.names) == 'table' and localeBundle.names or { en = 'English' };
 local localeStrings = type(localeBundle.strings) == 'table' and localeBundle.strings or { en = {} };
+local localeFonts = safe({}, function()
+    if uiSkin.load_locale_fonts == nil then return {}; end
+    return uiSkin.load_locale_fonts(imgui, ffi, localeStrings);
+end);
+local guiLocaleActive = false;
 
 local function isSupportedLanguage(value)
     return type(value) == 'string'
@@ -190,6 +195,10 @@ end
 local function tx(key, ...)
     local args = { ... };
     local language = currentLanguage();
+    if (language == 'ja' or language == 'zh')
+        and (not guiLocaleActive or localeFonts[language] == nil) then
+        language = 'en';
+    end
     local selected = localeStrings[language] or {};
     local english = localeStrings.en or {};
     local value = selected[key] or english[key] or key;
@@ -1439,7 +1448,12 @@ local function renderSettingsWindow()
 
     local beginCalled = false;
     local pushed = nil;
+    local localeFontPushed = false;
     local renderOk, renderError = pcall(function()
+        local language = currentLanguage();
+        localeFontPushed = uiSkin.push_locale_font ~= nil
+            and uiSkin.push_locale_font(imgui, localeFonts, language) == true;
+        guiLocaleActive = language ~= 'ja' and language ~= 'zh' or localeFontPushed;
         imgui.SetNextWindowSize({ 560, 610 }, ImGuiCond_FirstUseEver);
         pushed = uiSkin.push_window(imgui);
         local visible = imgui.Begin(
@@ -1534,6 +1548,10 @@ local function renderSettingsWindow()
         closeOk = pcall(imgui.End);
     end
     if pushed ~= nil then pcall(uiSkin.pop, imgui, pushed); end
+    guiLocaleActive = false;
+    if localeFontPushed and uiSkin.pop_locale_font ~= nil then
+        pcall(uiSkin.pop_locale_font, imgui);
+    end
     if not renderOk or not closeOk then
         settingsWindowOpen[1] = false;
         message(tx('error_render'), true);

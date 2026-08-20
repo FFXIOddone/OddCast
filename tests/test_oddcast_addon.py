@@ -1455,6 +1455,61 @@ def test_ui_skin_renders_each_sized_button_exactly_once(tmp_path: Path) -> None:
     assert "PASS OddCast sized button single-render contract" in completed.stdout
 
 
+def test_ui_skin_loads_exact_cjk_glyph_ranges(tmp_path: Path) -> None:
+    luajit = shutil.which("luajit")
+    assert luajit is not None
+    skin_path = ODDCAST_PATH.parent / "ui_skin.lua"
+    font_path = tmp_path / "test-font.ttf"
+    font_path.write_bytes(b"font fixture")
+    driver = tmp_path / "ui_skin_cjk_font_contract.lua"
+    driver.write_text(
+        r"""
+local ffi = require('ffi')
+local skin = dofile(arg[1])
+local calls, pushed, popped = {}, nil, 0
+local function includes(ranges, wanted)
+    for index = 0, 510, 2 do
+        local first = tonumber(ranges[index])
+        if first == 0 then return false end
+        local last = tonumber(ranges[index + 1])
+        if wanted >= first and wanted <= last then return true end
+    end
+    return false
+end
+local imgui = {
+    AddFontFromFileTTF=function(path, size, config, ranges)
+        assert(path == arg[2] and size == 16 and config == nil and type(ranges) == 'cdata')
+        calls[#calls + 1] = ranges
+        return { call=#calls }
+    end,
+    PushFont=function(font) pushed=font end,
+    PopFont=function() popped=popped+1 end,
+}
+local loaded = skin.load_locale_fonts(imgui, ffi, {
+    ja={sample='日本語'}, zh={sample='简体中文'},
+}, { ja={arg[2]}, zh={arg[2]} })
+assert(#calls == 2 and loaded.ja ~= nil and loaded.zh ~= nil, 'both CJK fonts were not loaded')
+assert(includes(calls[1], 0x65E5), 'Japanese day glyph was not requested')
+assert(includes(calls[2], 0x7B80), 'Simplified Chinese glyph was not requested')
+assert(skin.push_locale_font(imgui, loaded, 'zh') == true and pushed == loaded.zh.font, 'Chinese font was not pushed')
+skin.pop_locale_font(imgui)
+assert(popped == 1, 'CJK font stack was not balanced')
+print('PASS OddCast exact CJK font contract')
+""".lstrip(),
+        encoding="utf-8",
+        newline="\n",
+    )
+    completed = subprocess.run(
+        [luajit, str(driver), str(skin_path), str(font_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "PASS OddCast exact CJK font contract" in completed.stdout
+
+
 def test_oddcast_compiles_under_luajit(tmp_path: Path) -> None:
     luajit = shutil.which("luajit")
     assert luajit is not None
@@ -1478,10 +1533,24 @@ def test_oddcast_compiles_under_luajit(tmp_path: Path) -> None:
         locales_completed.stdout + locales_completed.stderr
     )
 
+    skin_completed = subprocess.run(
+        [luajit, "-b", str(ODDCAST_PATH.parent / "ui_skin.lua"), str(tmp_path / "ui_skin.luac")],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert skin_completed.returncode == 0, skin_completed.stdout + skin_completed.stderr
+
 
 def test_oddcast_locale_catalog_is_complete_and_format_safe(tmp_path: Path) -> None:
     luajit = shutil.which("luajit")
     assert luajit is not None
+    locale_bytes = LOCALES_PATH.read_bytes()
+    assert not locale_bytes.startswith(b"\xef\xbb\xbf")
+    locale_text = locale_bytes.decode("utf-8")
+    for mojibake_marker in ("Ã", "Â", "â€", "æ—", "ã‚", "�"):
+        assert mojibake_marker not in locale_text
     driver = tmp_path / "locale_contract.lua"
     driver.write_text(
         r"""
@@ -1501,7 +1570,23 @@ local formatArgs = {
     tier_updated={'Day', 'V', 5}, error_no_ready_day={'Fire', 'Firesday'},
     day_submitted={'Firesday', 'Fire', 'Fire V'}, weak_unknown={'Crab', 'Thunder V'},
     weak_family={'Crab', 'Thunder V'}, request_queued={'', 'Weakness'},
+    queue_pending={'Weakness', 'Crab'}, installed_version={'1.3.0'},
+    update_available={'1.4.0'},
 }
+
+local nativeKeys = {
+    'control_title', 'welcome_title', 'welcome_body', 'finish_setup',
+    'cast_section', 'cast_explain', 'cast_day', 'cast_weak', 'queue_idle',
+    'queue_pending', 'update_section', 'installed_version', 'check_updates',
+    'update_current', 'update_available', 'update_unavailable',
+}
+for _, code in ipairs({ 'ja', 'zh' }) do
+    for _, key in ipairs(nativeKeys) do
+        assert(catalog.strings[code][key] ~= catalog.strings.en[key], code .. ' retained English UI text: ' .. key)
+    end
+end
+assert(catalog.strings.zh.day == '日属性', 'Chinese day label is not native terminology')
+assert(not string.find(catalog.strings.zh.help_day, '曜日', 1, true), 'Chinese help contains Japanese terminology')
 
 for key, english in pairs(catalog.strings.en) do
     assert(type(english) == 'string' and english ~= '', 'empty English locale key: ' .. key)
