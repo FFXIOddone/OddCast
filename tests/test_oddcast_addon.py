@@ -1127,6 +1127,7 @@ imgui.Begin = function(title, open, flags)
     assertString(title, 'window title')
     assert(type(open) == 'table' and type(open[1]) == 'boolean', 'window open state must be a boolean ref')
     assert(type(flags) == 'number', 'window flags must be numeric')
+    assert(flags == ImGuiWindowFlags_AlwaysVerticalScrollbar, 'window must keep the stable scrollbar without disabling native collapse')
     assert(ui.beginDepth == 0, 'nested Begin call')
     if ui.failNextBegin then ui.failNextBegin = false; error('synthetic Begin failure') end
     ui.beginDepth = 1
@@ -1400,6 +1401,7 @@ def test_control_center_uses_oddq_skin_and_manual_update_contract(tmp_path: Path
     assert "ImGuiStyleVar_ScrollbarSize" in skin
     assert "ImGuiStyleVar_ButtonTextAlign" in skin
     assert "ImGuiWindowFlags_AlwaysVerticalScrollbar" in source
+    assert "ImGuiWindowFlags_NoCollapse" not in source
     assert "ODD_NETWORK_CALL: manual read-only GET" in checker
 
     luajit = shutil.which("luajit")

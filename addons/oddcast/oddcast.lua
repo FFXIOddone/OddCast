@@ -1442,11 +1442,11 @@ local function renderSettingsWindow()
     local renderOk, renderError = pcall(function()
         imgui.SetNextWindowSize({ 560, 610 }, ImGuiCond_FirstUseEver);
         pushed = uiSkin.push_window(imgui);
-        local windowFlags = bit.bor(
-            ImGuiWindowFlags_NoCollapse,
+        local visible = imgui.Begin(
+            tx('control_title'),
+            settingsWindowOpen,
             ImGuiWindowFlags_AlwaysVerticalScrollbar
         );
-        local visible = imgui.Begin(tx('control_title'), settingsWindowOpen, windowFlags);
         beginCalled = true;
         if not visible then
             return;
