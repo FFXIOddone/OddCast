@@ -1098,6 +1098,7 @@ struct = { unpack=function() return 0 end }
 addon = { path='fixture/' }
 ImGuiCond_FirstUseEver = 4
 ImGuiWindowFlags_NoCollapse = 32
+ImGuiWindowFlags_AlwaysVerticalScrollbar = 16384
 package.path = ODDCAST_PATH:match('^(.*[/\\])') .. '?.lua;' .. package.path
 
 local ui = {
@@ -1387,6 +1388,15 @@ def test_control_center_uses_oddq_skin_and_manual_update_contract(tmp_path: Path
     assert "updateChecker.check(addon.version)" in source
     assert "0.063, 0.067, 0.067" in skin
     assert "0.098, 0.858, 1.000" in skin
+    assert "skin.colors.title_bar" in skin
+    assert "ImGuiCol_ScrollbarBg" in skin
+    assert "ImGuiCol_ScrollbarGrab" in skin
+    assert "ImGuiCol_ScrollbarGrabHovered" in skin
+    assert "ImGuiCol_ScrollbarGrabActive" in skin
+    assert "ImGuiStyleVar_ScrollbarRounding" in skin
+    assert "ImGuiStyleVar_ScrollbarSize" in skin
+    assert "ImGuiStyleVar_ButtonTextAlign" in skin
+    assert "ImGuiWindowFlags_AlwaysVerticalScrollbar" in source
     assert "ODD_NETWORK_CALL: manual read-only GET" in checker
 
     luajit = shutil.which("luajit")

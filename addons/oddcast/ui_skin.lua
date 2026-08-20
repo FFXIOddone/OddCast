@@ -5,10 +5,15 @@ local skin = {}
 skin.colors = {
     bg = { 0.063, 0.067, 0.067, 1.00 },
     panel = { 0.094, 0.102, 0.102, 1.00 },
+    title_bar = { 0.059, 0.541, 0.862, 0.92 },
     blue_border = { 0.059, 0.541, 0.862, 0.72 },
     blue_highlight = { 0.098, 0.858, 1.000, 1.00 },
-    text = { 0.933, 0.914, 0.863, 1.00 },
+    text = { 1.000, 1.000, 1.000, 1.00 },
     muted = { 0.700, 0.745, 0.745, 1.00 },
+    scrollbar_bg = { 0.039, 0.043, 0.043, 0.82 },
+    scrollbar_grab = { 0.059, 0.541, 0.862, 0.40 },
+    scrollbar_grab_hovered = { 0.059, 0.541, 0.862, 0.68 },
+    scrollbar_grab_active = { 0.098, 0.858, 1.000, 0.84 },
 }
 
 local function global(name)
@@ -37,17 +42,25 @@ function skin.push_window(imgui)
     push_color(imgui, 'ImGuiCol_Text', skin.colors.text, pushed)
     push_color(imgui, 'ImGuiCol_WindowBg', skin.colors.bg, pushed)
     push_color(imgui, 'ImGuiCol_Border', skin.colors.blue_border, pushed)
-    push_color(imgui, 'ImGuiCol_TitleBg', skin.colors.panel, pushed)
-    push_color(imgui, 'ImGuiCol_TitleBgActive', skin.colors.panel, pushed)
+    push_color(imgui, 'ImGuiCol_TitleBg', skin.colors.title_bar, pushed)
+    push_color(imgui, 'ImGuiCol_TitleBgActive', skin.colors.title_bar, pushed)
+    push_color(imgui, 'ImGuiCol_TitleBgCollapsed', skin.colors.title_bar, pushed)
     push_color(imgui, 'ImGuiCol_Button', { 0.114, 0.110, 0.086, 0.88 }, pushed)
     push_color(imgui, 'ImGuiCol_ButtonHovered', { 0.059, 0.541, 0.862, 0.62 }, pushed)
     push_color(imgui, 'ImGuiCol_ButtonActive', { 0.098, 0.858, 1.000, 0.72 }, pushed)
     push_color(imgui, 'ImGuiCol_FrameBg', { 0.059, 0.063, 0.063, 0.90 }, pushed)
+    push_color(imgui, 'ImGuiCol_ScrollbarBg', skin.colors.scrollbar_bg, pushed)
+    push_color(imgui, 'ImGuiCol_ScrollbarGrab', skin.colors.scrollbar_grab, pushed)
+    push_color(imgui, 'ImGuiCol_ScrollbarGrabHovered', skin.colors.scrollbar_grab_hovered, pushed)
+    push_color(imgui, 'ImGuiCol_ScrollbarGrabActive', skin.colors.scrollbar_grab_active, pushed)
     push_var(imgui, 'ImGuiStyleVar_WindowRounding', 10.0, pushed)
     push_var(imgui, 'ImGuiStyleVar_FrameRounding', 5.0, pushed)
+    push_var(imgui, 'ImGuiStyleVar_ScrollbarRounding', 3.0, pushed)
     push_var(imgui, 'ImGuiStyleVar_WindowBorderSize', 0.0, pushed)
     push_var(imgui, 'ImGuiStyleVar_ItemSpacing', { 8.0, 6.0 }, pushed)
     push_var(imgui, 'ImGuiStyleVar_FramePadding', { 4.0, 5.0 }, pushed)
+    push_var(imgui, 'ImGuiStyleVar_ButtonTextAlign', { 0.5, 0.5 }, pushed)
+    push_var(imgui, 'ImGuiStyleVar_ScrollbarSize', 14.0, pushed)
     return pushed
 end
 
