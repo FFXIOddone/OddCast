@@ -57,7 +57,7 @@ def test_luashitacast_vana_time_adaptation_has_complete_attribution() -> None:
     provenance_index = addon_text.index(provenance)
     signature_index = addon_text.index("local VANA_TIME_SIGNATURE")
     assert 0 < signature_index - provenance_index < 300
-    assert "addon.version = '1.3.0';" in addon_text
+    assert "addon.version = '1.4.0';" in addon_text
 
     for text in readme_texts + notice_texts:
         assert "https://github.com/ThornyFFXI/LuAshitacast" in text
@@ -1387,6 +1387,9 @@ def test_control_center_uses_oddq_skin_and_manual_update_contract(tmp_path: Path
     assert "requestConfiguredAction('weak')" in source
     assert "activeSettings.onboardingComplete ~= true" in source
     assert "updateChecker.check(addon.version)" in source
+    assert "updateChecker.begin_install(addon.version, addon.path)" in source
+    assert "updateChecker.poll_install(updateState.result_path)" in source
+    assert "QueueCommand(-1, '/addon reload oddcast')" in source
     assert "0.063, 0.067, 0.067" in skin
     assert "0.098, 0.858, 1.000" in skin
     assert "transparent = { 0.000, 0.000, 0.000, 0.000 }" in skin
@@ -1411,12 +1414,20 @@ def test_control_center_uses_oddq_skin_and_manual_update_contract(tmp_path: Path
         (
         "local checker=dofile([[__CHECKER__]])\n"
         "local calls=0\n"
-        "local function response() calls=calls+1; return '{\"tag_name\":\"OddCast-v1.4.0\"}',200 end\n"
-        "local result=checker.check('1.3.0',{request=response})\n"
-        "assert(calls==1 and result.status=='available' and result.latest_version=='1.4.0')\n"
-        "local current=checker.check('1.4.0',{request=response})\n"
+        "local function response() calls=calls+1; return '{\"tag_name\":\"OddCast-v1.5.0\"}',200 end\n"
+        "local result=checker.check('1.4.0',{request=response})\n"
+        "assert(calls==1 and result.status=='available' and result.latest_version=='1.5.0')\n"
+        "local current=checker.check('1.5.0',{request=response})\n"
         "assert(current.status=='current')\n"
-        "print('PASS OddCast manual update checker')\n"
+        "local executed, removed = nil, nil\n"
+        "local started,path=checker.begin_install('1.4.0',[[C:/Ashita/addons/oddcast]],{tmpname=function() return [[C:\\Temp\\oddcast-result.tmp]] end,remove=function(v) removed=v end,execute=function(v) executed=v return 0 end})\n"
+        "assert(started and path==[[C:\\Temp\\oddcast-result.tmp]])\n"
+        "assert(removed==path and string.find(executed,'Update-OddCast.ps1',1,true))\n"
+        "assert(string.find(executed,[[-ResultPath \"C:\\Temp\\oddcast-result.tmp\"]],1,true))\n"
+        "local closed=false\n"
+        "local polled=checker.poll_install(path,{open=function() return {read=function() return 'success|1.5.0' end,close=function() closed=true end} end,remove=function(v) removed=v end})\n"
+        "assert(polled.status=='success' and polled.detail=='1.5.0' and closed and removed==path)\n"
+        "print('PASS OddCast verified update checker')\n"
         ).replace(
             "__CHECKER__", (ODDCAST_PATH.parent / "update_checker.lua").as_posix()
         ),
@@ -1427,7 +1438,14 @@ def test_control_center_uses_oddq_skin_and_manual_update_contract(tmp_path: Path
         [luajit, str(driver)], check=False, capture_output=True, text=True, timeout=10
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    assert "PASS OddCast manual update checker" in completed.stdout
+    assert "PASS OddCast verified update checker" in completed.stdout
+
+    updater = (ODDCAST_PATH.parent / "Update-OddCast.ps1").read_text(encoding="utf-8")
+    assert "Get-FileHash -Algorithm SHA256" in updater
+    assert "The release archive checksum does not match." in updater
+    assert "The OddCast addon directory cannot be a link or reparse point." in updater
+    assert "Install-OddCast.ps1" in updater
+    assert "Write-Result 'success' $version" in updater
 
 
 def test_ui_skin_renders_each_sized_button_exactly_once(tmp_path: Path) -> None:
@@ -1570,15 +1588,16 @@ local formatArgs = {
     tier_updated={'Day', 'V', 5}, error_no_ready_day={'Fire', 'Firesday'},
     day_submitted={'Firesday', 'Fire', 'Fire V'}, weak_unknown={'Crab', 'Thunder V'},
     weak_family={'Crab', 'Thunder V'}, request_queued={'', 'Weakness'},
-    queue_pending={'Weakness', 'Crab'}, installed_version={'1.3.0'},
-    update_available={'1.4.0'},
+    queue_pending={'Weakness', 'Crab'}, installed_version={'1.4.0'},
+    update_available={'1.5.0'},
 }
 
 local nativeKeys = {
     'control_title', 'welcome_title', 'welcome_body', 'finish_setup',
     'cast_section', 'cast_explain', 'cast_day', 'cast_weak', 'queue_idle',
     'queue_pending', 'update_section', 'installed_version', 'check_updates',
-    'update_current', 'update_available', 'update_unavailable',
+    'update_current', 'update_available', 'update_unavailable', 'install_update',
+    'update_installing', 'update_failed',
 }
 for _, code in ipairs({ 'ja', 'zh' }) do
     for _, key in ipairs(nativeKeys) do

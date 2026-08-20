@@ -7,6 +7,7 @@ $source = Join-Path $packageRoot 'oddcast'
 $required = @(
     'LICENSE-LUASHITACAST-MIT', 'LICENSE-ODDCAST-GPL-3.0', 'README.md',
     'THIRD_PARTY_NOTICES.md', 'locales.lua', 'oddcast.lua', 'ui_skin.lua',
+    'Update-OddCast.ps1',
     'update_checker.lua', 'weakness_data.lua', 'weakness_data_manifest.json'
 )
 

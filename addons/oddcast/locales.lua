@@ -15,7 +15,7 @@ local catalog = {
             language='Language', settings_title='OddCast Settings', control_title='OddCast Control Center', target='Target',
             welcome_title='Welcome to OddCast', welcome_body='Choose your target mode and spell ceilings below. OddCast remains fully manual: each button submits one explicit cast request.', finish_setup='Finish setup', setup_complete='OddCast setup complete.',
             cast_section='Cast controls', cast_explain='Uses the configured target and the strongest ready spell within your ceiling.', cast_day='Cast day element', cast_weak='Cast target weakness', queue_idle='Queue: Ready', queue_pending='Queue: %s on %s',
-            update_section='Updates', installed_version='Installed version: %s', check_updates='Check for updates', update_current='OddCast is up to date.', update_available='OddCast %s is available. Use Install-OddCast.cmd from the new release.', update_unavailable='Update status is unavailable. Check the public OddCast releases page.',
+            update_section='Updates', installed_version='Installed version: %s', check_updates='Check for updates', install_update='Install update and reload', update_installing='Installing the verified update...', update_current='OddCast is up to date.', update_available='OddCast %s is available.', update_unavailable='Update status is unavailable. Check the public OddCast releases page.', update_failed='OddCast could not install the update: %s',
             tier_section='Spell tier ceilings', chat_section='Chat feedback', language_section='Language',
             target_invalid='The current target setting is invalid. Choose a safe target below to repair it.',
             target_current='<t> - current target', target_battle='<bt> - current battle target',
@@ -90,7 +90,7 @@ local catalog = {
         ja = {
             control_title='OddCast コントロールセンター', welcome_title='OddCastへようこそ', welcome_body='下でターゲットモードと魔法ティア上限を選択してください。OddCastは完全手動です。各ボタンは明示的な詠唱リクエストを1回送信します。', finish_setup='設定を完了', setup_complete='OddCastの初期設定が完了しました。',
             cast_section='詠唱操作', cast_explain='設定済みのターゲットに、上限内で使用可能な最強の魔法を使用します。', cast_day='曜日属性を詠唱', cast_weak='ターゲットの弱点を詠唱', queue_idle='キュー: 待機中', queue_pending='キュー: %s（%s）',
-            update_section='更新', installed_version='インストール済みバージョン: %s', check_updates='更新を確認', update_current='OddCastは最新です。', update_available='OddCast %sを利用できます。新しいリリースのInstall-OddCast.cmdを使用してください。', update_unavailable='更新状況を取得できません。OddCastの公開リリースページを確認してください。',
+            update_section='更新', installed_version='インストール済みバージョン: %s', check_updates='更新を確認', install_update='更新をインストールして再読み込み', update_installing='検証済みの更新をインストールしています...', update_current='OddCastは最新です。', update_available='OddCast %sを利用できます。', update_unavailable='更新状況を取得できません。OddCastの公開リリースページを確認してください。', update_failed='OddCastの更新をインストールできませんでした: %s',
             error_one_shot='未対応の一時ターゲットです。[t] または10進数のサーバーIDを使用してください。',
             error_subtarget='OddCastを使用する前に、アクティブなサブターゲットを確定またはキャンセルしてください。',
             on='オン', off='オフ', day='曜日', weakness='弱点', language='言語', settings_title='OddCast 設定', target='ターゲット', tier_section='魔法ティア上限', chat_section='チャット表示', language_section='言語', target_invalid='現在のターゲット設定が無効です。下から安全なターゲットを選んで修正してください。', target_current='<t> - 現在のターゲット', target_battle='<bt> - 現在の戦闘ターゲット', tier_explain='各モードの上限は個別です。OddCast は上限以下で使用可能な最強の魔法を選びます。', chat_invalid='通常チャット設定が無効です。下のチェックボックスで修正してください。', chat_show='通常チャットメッセージを表示', chat_explain='通常メッセージをオフにしても、エラーとコマンドへの応答は表示されます。', language_invalid='言語設定が無効です。下から言語を選んで修正してください。', language_explain='チャット、ヘルプ、設定の文字を変更します。魔法名はゲーム互換のままです。', reset='初期設定に戻す',
@@ -107,7 +107,7 @@ local catalog = {
         zh = {
             control_title='OddCast 控制中心', welcome_title='欢迎使用 OddCast', welcome_body='请在下方选择目标模式和法术等级上限。OddCast 始终采用完全手动操作：每个按钮只提交一次明确的施法请求。', finish_setup='完成设置', setup_complete='OddCast 初始设置已完成。',
             cast_section='施法控制', cast_explain='对已设置的目标施放等级上限内最强的可用法术。', cast_day='施放当日属性法术', cast_weak='施放目标弱点法术', queue_idle='队列：就绪', queue_pending='队列：%s（%s）',
-            update_section='更新', installed_version='已安装版本：%s', check_updates='检查更新', update_current='OddCast 已是最新版本。', update_available='OddCast %s 现已发布。请使用新版本中的 Install-OddCast.cmd。', update_unavailable='无法获取更新状态。请查看 OddCast 公开发布页面。',
+            update_section='更新', installed_version='已安装版本：%s', check_updates='检查更新', install_update='安装更新并重新加载', update_installing='正在安装已验证的更新...', update_current='OddCast 已是最新版本。', update_available='OddCast %s 现已发布。', update_unavailable='无法获取更新状态。请查看 OddCast 公开发布页面。', update_failed='OddCast 无法安装更新：%s',
             error_one_shot='不支持的一次性目标。请使用 [t] 或十进制服务器 ID。',
             error_subtarget='使用 OddCast 前，请确认或取消当前子目标。',
             on='开启', off='关闭', day='曜日', weakness='弱点', language='语言', settings_title='OddCast 设置', target='目标', tier_section='法术等级上限', chat_section='聊天反馈', language_section='语言', target_invalid='当前目标设置无效。请在下方选择安全目标进行修复。', target_current='<t> - 当前目标', target_battle='<bt> - 当前战斗目标', tier_explain='每种模式独立限制。OddCast 仍会选择上限内最强的可用法术。', chat_invalid='常规聊天设置无效。请使用下方复选框进行修复。', chat_show='显示常规聊天消息', chat_explain='关闭常规消息后，错误和明确的命令回复仍会显示。', language_invalid='语言设置无效。请在下方选择语言进行修复。', language_explain='更改聊天、帮助和设置文本。法术名称保持游戏兼容。', reset='恢复默认设置',

@@ -4,7 +4,7 @@
 
 addon.name = 'oddcast';
 addon.author = 'Oddone';
-addon.version = '1.3.0';
+addon.version = '1.4.0';
 addon.desc = 'Selects a ready nuke for the current Vana day, a typical weakness, or an unknown-target fallback.';
 
 require('common');
@@ -216,6 +216,39 @@ end
 local function message(text, isError)
     local formatter = isError and chat.error or chat.message;
     print(chat.header('OddCast') .. formatter(text));
+end
+
+local function beginUpdateInstall()
+    local started, resultPath = updateChecker.begin_install(addon.version, addon.path);
+    if not started then
+        updateState = { status='install_error', detail=tostring(resultPath or 'unable to start updater') };
+        return;
+    end
+    updateState.status = 'installing';
+    updateState.result_path = resultPath;
+    updateState.started_at = os.time();
+end
+
+local function processUpdateInstall()
+    if updateState.status ~= 'installing' or updateState.result_path == nil then return; end
+    local result = updateChecker.poll_install(updateState.result_path);
+    if result == nil then
+        if os.time() - (updateState.started_at or os.time()) > 180 then
+            updateState = { status='install_error', detail='The updater did not finish within three minutes.' };
+            message(tx('update_failed', updateState.detail), true);
+        end
+        return;
+    end
+    if result.status == 'success' then
+        updateState = { status='reloading' };
+        local chatManager = safe(nil, function() return AshitaCore:GetChatManager(); end);
+        if chatManager ~= nil then chatManager:QueueCommand(-1, '/addon reload oddcast'); end
+    elseif result.status == 'current' then
+        updateState = { status='current', latest_version=result.detail };
+    else
+        updateState = { status='install_error', detail=result.detail };
+        message(tx('update_failed', result.detail), true);
+    end
 end
 
 local function routineMessage(text)
@@ -1529,6 +1562,13 @@ local function renderSettingsWindow()
         if updateState.status == 'available' then
             imgui.TextWrapped(tx('update_available', updateState.latest_version));
             uiSkin.muted(imgui, updateState.release_url);
+            if uiSkin.button(imgui, tx('install_update'), true, { 245, 34 }) then
+                beginUpdateInstall();
+            end
+        elseif updateState.status == 'installing' or updateState.status == 'reloading' then
+            imgui.TextWrapped(tx('update_installing'));
+        elseif updateState.status == 'install_error' then
+            imgui.TextWrapped(tx('update_failed', updateState.detail or 'unknown error'));
         elseif updateState.status == 'current' then
             imgui.Text(tx('update_current'));
         elseif updateState.status == 'unavailable' or updateState.status == 'invalid' then
@@ -1676,6 +1716,7 @@ end);
 
 ashita.events.register('d3d_present', 'oddcast_pending_cast_cb', function()
     processPendingRequest();
+    processUpdateInstall();
     renderSettingsWindow();
 end);
 

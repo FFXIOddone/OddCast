@@ -26,6 +26,7 @@ PAYLOAD_FILES = (
     "locales.lua",
     "oddcast.lua",
     "ui_skin.lua",
+    "Update-OddCast.ps1",
     "update_checker.lua",
     "weakness_data.lua",
     "weakness_data_manifest.json",

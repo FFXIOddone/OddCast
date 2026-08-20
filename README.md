@@ -9,7 +9,7 @@ manual: there is no automatic rotation and no packet injection.
 - Ashita v4
 - a supported FFXI client build with the validated Vana'diel-time layout
 
-For a packaged release, verify `OddCast-v1.3.0.zip` against `SHA256SUMS.txt`,
+For a packaged release, verify `OddCast-v1.4.0.zip` against `SHA256SUMS.txt`,
 extract the complete ZIP, and double-click `Install-OddCast.cmd`. The installer
 locates Ashita, stages and hash-verifies the exact payload, backs up an existing
 install, and verifies the installed copy. For a custom location, run
@@ -17,7 +17,7 @@ install, and verifies the installed copy. For a custom location, run
 copy the complete `addons\oddcast` directory to `Ashita\addons\oddcast`.
 
 The installed directory must contain exactly `oddcast.lua`, `locales.lua`,
-`ui_skin.lua`, `update_checker.lua`, `weakness_data.lua`,
+`ui_skin.lua`, `Update-OddCast.ps1`, `update_checker.lua`, `weakness_data.lua`,
 `weakness_data_manifest.json`, `README.md`, `THIRD_PARTY_NOTICES.md`,
 `LICENSE-LUASHITACAST-MIT`, and `LICENSE-ODDCAST-GPL-3.0`. Then run:
 
@@ -80,6 +80,13 @@ scripts, chat and help-command replies fall back to English instead of showing
 replacement question marks. Spell names remain game-compatible.
 Spell names, command keywords, target tokens, and player-entered monster names
 remain unchanged so Ashita commands and target identity checks stay exact.
+
+When an update is available, the settings window shows **Install update and
+reload**. The updater downloads only the official GitHub release, verifies its
+SHA-256 checksum and archive paths, then uses the existing staged installer.
+The previous installation remains available as a timestamped rollback backup.
+OddCast reloads itself only after installation succeeds; any failure leaves the
+current version active and reports the error in the settings window and chat.
 
 To make every receiving character use the sender's selected monster, send the
 command through MultiSend:
@@ -206,8 +213,8 @@ luajit -b addons/oddcast/oddcast.lua oddcast.luac
 A clean-worktree release is built and then reproduced byte-for-byte with:
 
 ```text
-python tools/build_release.py --expect-version 1.3.0 --output build/release/v1.3.0
-python tools/build_release.py --expect-version 1.3.0 --output build/release/v1.3.0 --check
+python tools/build_release.py --expect-version 1.4.0 --output build/release/v1.4.0
+python tools/build_release.py --expect-version 1.4.0 --output build/release/v1.4.0 --check
 ```
 
 The builder uses a fixed eight-file allowlist and produces the ZIP,
